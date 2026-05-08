@@ -4,7 +4,7 @@
   "owner": {
     "name": "Sing Cheung",
     "email": "sing.cheung@cyngn.com",
-    "url": "https://github.com/sing-cheung"
+    "url": "https://github.com/singyiu"
   },
   "plugins": [
     {
@@ -12,7 +12,7 @@
       "source": ".",
       "description": "Observability for Claude Code via Grafana Cloud and the Alloy OpenTelemetry collector.",
       "version": "0.1.0",
-      "homepage": "https://github.com/sing-cheung/claude-grafana-plugin",
+      "homepage": "https://github.com/singyiu/claude-grafana-plugin",
       "keywords": ["observability", "grafana", "alloy", "opentelemetry"]
     }
   ]

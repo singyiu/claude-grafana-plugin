@@ -7,8 +7,8 @@
     "name": "Sing Cheung",
     "email": "sing.cheung@cyngn.com"
   },
-  "homepage": "https://github.com/sing-cheung/claude-grafana-plugin",
-  "repository": "https://github.com/sing-cheung/claude-grafana-plugin",
+  "homepage": "https://github.com/singyiu/claude-grafana-plugin",
+  "repository": "https://github.com/singyiu/claude-grafana-plugin",
   "license": "MIT",
   "keywords": [
     "observability",

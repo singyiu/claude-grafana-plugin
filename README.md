@@ -33,14 +33,14 @@ Claude Code ──OTLP/gRPC──► Alloy ──HTTPS+BasicAuth──► Grafan
 ### From the marketplace (once published)
 
 ```bash
-claude /plugin marketplace add sing-cheung/claude-grafana-plugin
+claude /plugin marketplace add singyiu/claude-grafana-plugin
 claude /plugin install claude-grafana
 ```
 
 ### From a local checkout
 
 ```bash
-git clone https://github.com/sing-cheung/claude-grafana-plugin ~/dev/claude-grafana-plugin
+git clone https://github.com/singyiu/claude-grafana-plugin ~/dev/claude-grafana-plugin
 cd ~/dev/claude-grafana-plugin
 claude --plugin .
 ```

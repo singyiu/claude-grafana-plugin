@@ -4,7 +4,7 @@ Thanks for considering a contribution. This document covers how to file issues, 
 
 ## Filing issues
 
-Use [GitHub Issues](https://github.com/sing-cheung/claude-grafana-plugin/issues). Include:
+Use [GitHub Issues](https://github.com/singyiu/claude-grafana-plugin/issues). Include:
 
 - Plugin version (`cat .claude-plugin/plugin.json | jq .version`)
 - Claude Code version (`claude --version`)
@@ -16,7 +16,7 @@ Use [GitHub Issues](https://github.com/sing-cheung/claude-grafana-plugin/issues)
 ## Local development
 
 ```bash
-git clone https://github.com/sing-cheung/claude-grafana-plugin
+git clone https://github.com/singyiu/claude-grafana-plugin
 cd claude-grafana-plugin
 
 # Install the plugin from the local checkout
