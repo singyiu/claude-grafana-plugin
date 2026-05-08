@@ -1,0 +1,37 @@
+// claude-grafana :: paste this into your existing config.alloy if you chose
+// "skip" during /grafana-setup. The setup script normally drops a separate
+// claude.alloy module file and adds an `import.file` line for you. This
+// snippet is the manual alternative.
+//
+// Required env:
+//   GRAFANA_CLOUD_OTLP_ENDPOINT
+//   GRAFANA_CLOUD_OTLP_INSTANCE_ID
+//   GRAFANA_CLOUD_OTLP_API_TOKEN
+
+otelcol.receiver.otlp "claude_code" {
+  grpc { endpoint = "127.0.0.1:4317" }
+  http { endpoint = "127.0.0.1:4318" }
+  output {
+    metrics = [otelcol.processor.batch.claude_grafana.input]
+    logs    = [otelcol.processor.batch.claude_grafana.input]
+  }
+}
+
+otelcol.processor.batch "claude_grafana" {
+  output {
+    metrics = [otelcol.exporter.otlphttp.claude_grafana.input]
+    logs    = [otelcol.exporter.otlphttp.claude_grafana.input]
+  }
+}
+
+otelcol.exporter.otlphttp "claude_grafana" {
+  client {
+    endpoint = sys.env("GRAFANA_CLOUD_OTLP_ENDPOINT")
+    auth     = otelcol.auth.basic.claude_grafana.handler
+  }
+}
+
+otelcol.auth.basic "claude_grafana" {
+  username = sys.env("GRAFANA_CLOUD_OTLP_INSTANCE_ID")
+  password = sys.env("GRAFANA_CLOUD_OTLP_API_TOKEN")
+}

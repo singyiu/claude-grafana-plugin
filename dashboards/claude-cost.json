@@ -1,0 +1,122 @@
+{
+  "uid": "claude-grafana-cost",
+  "title": "Claude Code — Cost",
+  "description": "Approximate cost analysis. Use API provider billing for canonical numbers.",
+  "tags": ["claude-grafana", "cost"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5m",
+  "time": { "from": "now-30d", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "label": "Prometheus",
+        "query": "prometheus",
+        "current": {},
+        "refresh": 1
+      },
+      {
+        "name": "model",
+        "type": "query",
+        "label": "Model",
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "query": "label_values(claude_code_cost_usage_USD_total, model)",
+        "multi": true,
+        "includeAll": true,
+        "current": { "selected": false, "text": "All", "value": "$__all" },
+        "refresh": 2
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Total cost (window)",
+      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{
+        "expr": "sum(increase(claude_code_cost_usage_USD_total{model=~\"$model\"}[$__range]))",
+        "refId": "A",
+        "legendFormat": "USD"
+      }],
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 2 } }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Cost per session (avg)",
+      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{
+        "expr": "sum(increase(claude_code_cost_usage_USD_total{model=~\"$model\"}[$__range])) / clamp_min(sum(increase(claude_code_session_count_total[$__range])), 1)",
+        "refId": "A",
+        "legendFormat": "USD/session"
+      }],
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 3 } }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Cost per 1M tokens",
+      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{
+        "expr": "sum(increase(claude_code_cost_usage_USD_total{model=~\"$model\"}[$__range])) / clamp_min(sum(increase(claude_code_token_usage_tokens_total{model=~\"$model\"}[$__range])) / 1e6, 1)",
+        "refId": "A",
+        "legendFormat": "USD/1M tokens"
+      }],
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 3 } }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Daily cost by model",
+      "gridPos": { "x": 0, "y": 4, "w": 24, "h": 9 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{
+        "expr": "sum by (model) (increase(claude_code_cost_usage_USD_total{model=~\"$model\"}[1d]))",
+        "refId": "A",
+        "legendFormat": "{{model}}"
+      }],
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "custom": { "drawStyle": "bars", "stacking": { "mode": "normal" } } } }
+    },
+    {
+      "id": 5,
+      "type": "barchart",
+      "title": "Cost share by model (window)",
+      "gridPos": { "x": 0, "y": 13, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{
+        "expr": "sum by (model) (increase(claude_code_cost_usage_USD_total[$__range]))",
+        "refId": "A",
+        "legendFormat": "{{model}}",
+        "instant": true,
+        "format": "table"
+      }],
+      "fieldConfig": { "defaults": { "unit": "currencyUSD" } }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Tokens vs cost trend",
+      "gridPos": { "x": 12, "y": 13, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "sum(rate(claude_code_token_usage_tokens_total[5m]))",
+          "refId": "A",
+          "legendFormat": "tokens/s"
+        },
+        {
+          "expr": "sum(rate(claude_code_cost_usage_USD_total[5m])) * 3600",
+          "refId": "B",
+          "legendFormat": "USD/hour"
+        }
+      ]
+    }
+  ]
+}

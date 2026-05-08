@@ -1,0 +1,110 @@
+{
+  "uid": "claude-grafana-tools",
+  "title": "Claude Code — Tools",
+  "description": "Tool-call patterns, edit-tool decisions, and tool-call failures.",
+  "tags": ["claude-grafana", "tools"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "1m",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "label": "Prometheus",
+        "query": "prometheus",
+        "current": {},
+        "refresh": 1
+      },
+      {
+        "name": "loki",
+        "type": "datasource",
+        "label": "Loki",
+        "query": "loki",
+        "current": {},
+        "refresh": 1
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Edit decisions (window)",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{
+        "expr": "sum(increase(claude_code_code_edit_tool_decision_count_total[$__range]))",
+        "refId": "A",
+        "legendFormat": "decisions"
+      }],
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Approved %",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{
+        "expr": "100 * sum(increase(claude_code_code_edit_tool_decision_count_total{decision=\"accept\"}[$__range])) / clamp_min(sum(increase(claude_code_code_edit_tool_decision_count_total[$__range])), 1)",
+        "refId": "A",
+        "legendFormat": "%"
+      }],
+      "fieldConfig": { "defaults": { "unit": "percent", "decimals": 1 } }
+    },
+    {
+      "id": 3,
+      "type": "barchart",
+      "title": "Decisions by tool & outcome (window)",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{
+        "expr": "sum by (tool, decision) (increase(claude_code_code_edit_tool_decision_count_total[$__range]))",
+        "refId": "A",
+        "legendFormat": "{{tool}} / {{decision}}",
+        "format": "table",
+        "instant": true
+      }]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Edit-tool decisions over time",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{
+        "expr": "sum by (decision) (rate(claude_code_code_edit_tool_decision_count_total[5m]))",
+        "refId": "A",
+        "legendFormat": "{{decision}}"
+      }],
+      "fieldConfig": { "defaults": { "unit": "ops" } }
+    },
+    {
+      "id": 5,
+      "type": "logs",
+      "title": "Recent tool failures",
+      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 10 },
+      "datasource": { "type": "loki", "uid": "${loki}" },
+      "targets": [{
+        "expr": "{service_namespace=\"claude-code\"} |= \"PostToolUseFailure\" | json",
+        "refId": "A"
+      }],
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending" }
+    },
+    {
+      "id": 6,
+      "type": "logs",
+      "title": "Recent MCP server connections",
+      "gridPos": { "x": 0, "y": 22, "w": 24, "h": 8 },
+      "datasource": { "type": "loki", "uid": "${loki}" },
+      "targets": [{
+        "expr": "{service_namespace=\"claude-code\"} |= \"mcp_server_connection\" | json",
+        "refId": "A"
+      }],
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending" }
+    }
+  ]
+}

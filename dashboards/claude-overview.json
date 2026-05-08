@@ -1,0 +1,146 @@
+{
+  "uid": "claude-grafana-overview",
+  "title": "Claude Code — Overview",
+  "description": "Top-level health of Claude Code activity: sessions, tokens, cost, lines of code.",
+  "tags": ["claude-grafana", "overview"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "1m",
+  "time": { "from": "now-24h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "label": "Prometheus",
+        "query": "prometheus",
+        "current": {},
+        "hide": 0,
+        "refresh": 1
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Sessions (window)",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{
+        "expr": "sum(increase(claude_code_session_count_total[$__range]))",
+        "refId": "A",
+        "legendFormat": "sessions"
+      }],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "decimals": 0, "color": { "mode": "thresholds" } },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "values": false }, "colorMode": "value", "textMode": "value_and_name" }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Cost (window, USD)",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{
+        "expr": "sum(increase(claude_code_cost_usage_USD_total[$__range]))",
+        "refId": "A",
+        "legendFormat": "USD"
+      }],
+      "fieldConfig": {
+        "defaults": { "unit": "currencyUSD", "decimals": 2, "color": { "mode": "thresholds" } },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "values": false }, "colorMode": "value", "textMode": "value_and_name" }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Tokens (window)",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{
+        "expr": "sum(increase(claude_code_token_usage_tokens_total[$__range]))",
+        "refId": "A",
+        "legendFormat": "tokens"
+      }],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "decimals": 0, "color": { "mode": "thresholds" } },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "values": false }, "colorMode": "value", "textMode": "value_and_name" }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Active time (window, min)",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{
+        "expr": "sum(increase(claude_code_active_time_total_seconds_total[$__range])) / 60",
+        "refId": "A",
+        "legendFormat": "min"
+      }],
+      "fieldConfig": {
+        "defaults": { "unit": "m", "decimals": 1, "color": { "mode": "thresholds" } },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "values": false }, "colorMode": "value", "textMode": "value_and_name" }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Sessions over time (by start_type)",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{
+        "expr": "sum by (start_type) (rate(claude_code_session_count_total[5m]))",
+        "refId": "A",
+        "legendFormat": "{{start_type}}"
+      }],
+      "fieldConfig": { "defaults": { "unit": "ops" } }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Tokens by type",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{
+        "expr": "sum by (type) (rate(claude_code_token_usage_tokens_total[5m]))",
+        "refId": "A",
+        "legendFormat": "{{type}}"
+      }],
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Cost over time (USD/hour)",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{
+        "expr": "sum(rate(claude_code_cost_usage_USD_total[5m])) * 3600",
+        "refId": "A",
+        "legendFormat": "USD/hour"
+      }],
+      "fieldConfig": { "defaults": { "unit": "currencyUSD" } }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Lines of code added vs removed",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{
+        "expr": "sum by (type) (rate(claude_code_lines_of_code_count_total[5m]))",
+        "refId": "A",
+        "legendFormat": "{{type}}"
+      }],
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    }
+  ]
+}
