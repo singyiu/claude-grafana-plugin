@@ -4,6 +4,11 @@ All notable changes to `claude-grafana` are documented here. Format follows [Kee
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-05-08
+### Fixed
+- `marketplace.json`: changed `"source": "."` to `"source": "./"` so Claude Code recognizes it as a filesystem source. Older form failed install with "This plugin uses a source type your Claude Code version does not support."
+- Removed unsupported `$schema` and `owner.url` fields; added a `metadata` block per the working anthropic / financial-services / context-mode marketplace shape.
+
 ## [0.1.1] - 2026-05-08
 ### Fixed
 - GitHub owner references in `plugin.json`, `marketplace.json`, `README.md`, and `CONTRIBUTING.md` now point at `singyiu/claude-grafana-plugin` (the actual repo location).

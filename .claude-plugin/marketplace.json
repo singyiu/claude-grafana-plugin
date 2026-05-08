@@ -1,17 +1,19 @@
 {
-  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "claude-grafana-marketplace",
   "owner": {
     "name": "Sing Cheung",
-    "email": "sing.cheung@cyngn.com",
-    "url": "https://github.com/singyiu"
+    "email": "sing.cheung@cyngn.com"
+  },
+  "metadata": {
+    "description": "Observability tooling for Claude Code via Grafana Cloud.",
+    "version": "0.1.2"
   },
   "plugins": [
     {
       "name": "claude-grafana",
-      "source": ".",
+      "source": "./",
       "description": "Observability for Claude Code via Grafana Cloud and the Alloy OpenTelemetry collector.",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "homepage": "https://github.com/singyiu/claude-grafana-plugin",
       "keywords": ["observability", "grafana", "alloy", "opentelemetry"]
     }
