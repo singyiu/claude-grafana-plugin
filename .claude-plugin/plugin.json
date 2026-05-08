@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin.json",
+  "name": "claude-grafana",
+  "version": "0.1.0",
+  "description": "Observability for Claude Code via Grafana Cloud and the Alloy OpenTelemetry collector. Guided onboarding, baseline dashboards, and natural-language query and dashboard skills.",
+  "author": {
+    "name": "Sing Cheung",
+    "email": "sing.cheung@cyngn.com"
+  },
+  "homepage": "https://github.com/sing-cheung/claude-grafana-plugin",
+  "repository": "https://github.com/sing-cheung/claude-grafana-plugin",
+  "license": "MIT",
+  "keywords": [
+    "observability",
+    "grafana",
+    "grafana-cloud",
+    "alloy",
+    "opentelemetry",
+    "otel",
+    "monitoring",
+    "telemetry",
+    "metrics",
+    "logs"
+  ],
+  "skills": "./skills/"
+}

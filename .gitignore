@@ -1,0 +1,38 @@
+# Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Backups created by setup scripts
+*.pre-claude-grafana.bak
+*.bak
+
+# Logs
+*.log
+logs/
+
+# Generated dashboards (user-specific)
+dashboards/*.local.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
