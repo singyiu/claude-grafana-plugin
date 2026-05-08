@@ -4,6 +4,10 @@ All notable changes to `claude-grafana` are documented here. Format follows [Kee
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-05-08
+### Fixed
+- GitHub owner references in `plugin.json`, `marketplace.json`, `README.md`, and `CONTRIBUTING.md` now point at `singyiu/claude-grafana-plugin` (the actual repo location).
+
 ## [0.1.0] - 2026-05-08
 ### Added
 - Initial public release.

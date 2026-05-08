@@ -11,7 +11,7 @@
       "name": "claude-grafana",
       "source": ".",
       "description": "Observability for Claude Code via Grafana Cloud and the Alloy OpenTelemetry collector.",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "homepage": "https://github.com/singyiu/claude-grafana-plugin",
       "keywords": ["observability", "grafana", "alloy", "opentelemetry"]
     }
