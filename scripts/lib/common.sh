@@ -33,6 +33,23 @@ PLUGIN_NAME="claude-grafana"
 PLUGIN_TAG="claude-grafana"
 BACKUP_SUFFIX=".pre-${PLUGIN_TAG}.bak"
 
+# ─── Stable data dir ─────────────────────────────────────────────────────────
+# .env, datasource UID cache, and any user state lives OUTSIDE the plugin cache
+# directory, since the plugin cache can be wiped on update. Honors XDG.
+claude_grafana_data_dir() {
+  if [ -n "${CLAUDE_GRAFANA_DATA_DIR:-}" ]; then
+    printf '%s\n' "$CLAUDE_GRAFANA_DATA_DIR"
+  elif [ -n "${XDG_CONFIG_HOME:-}" ]; then
+    printf '%s/claude-grafana\n' "$XDG_CONFIG_HOME"
+  else
+    printf '%s/.config/claude-grafana\n' "$HOME"
+  fi
+}
+
+claude_grafana_env_file() {
+  printf '%s/.env\n' "$(claude_grafana_data_dir)"
+}
+
 # ─── DRY_RUN ─────────────────────────────────────────────────────────────────
 DRY_RUN="${DRY_RUN:-0}"
 for arg in "${@-}"; do
@@ -83,23 +100,30 @@ run_or_print() {
 }
 
 # ─── Env loading ─────────────────────────────────────────────────────────────
-# Loads .env from $CLAUDE_PLUGIN_ROOT or current directory. Silent if missing.
+# Loads .env from the stable data dir (~/.config/claude-grafana/.env) by
+# default. The legacy plugin-root path is also probed for migration.
 load_env() {
-  local env_file="${1:-$CLAUDE_PLUGIN_ROOT/.env}"
+  local env_file="${1:-$(claude_grafana_env_file)}"
+  local legacy_file="$CLAUDE_PLUGIN_ROOT/.env"
   if [ -f "$env_file" ]; then
-    # Allow comments and blank lines. Don't choke on values with spaces.
     set -a
     # shellcheck disable=SC1090
     . "$env_file"
     set +a
     log_dim "Loaded env from $env_file"
+  elif [ -f "$legacy_file" ]; then
+    log_warn "Found legacy .env at $legacy_file. Migrate to $env_file."
+    set -a
+    # shellcheck disable=SC1090
+    . "$legacy_file"
+    set +a
   fi
 }
 
 require_env() {
   local var="$1"
   if [ -z "${!var:-}" ]; then
-    die "Required env var $var is not set. Run /grafana-setup or edit \$CLAUDE_PLUGIN_ROOT/.env."
+    die "Required env var $var is not set. Run /grafana-setup or edit $(claude_grafana_env_file)."
   fi
 }
 

@@ -5,7 +5,7 @@
 Two secrets, both Grafana Cloud access tokens:
 
 1. **OTLP push token** — `metrics:write`, `logs:write`. Used by Alloy. Stored in `/etc/alloy/claude.env` (or `~/.config/alloy/claude.env` for non-root installs), chmod 600.
-2. **HTTP API token** — `dashboards:write`, `datasources:read`. Used by the query and dashboard skills. Stored in `<plugin-root>/.env`, chmod 600.
+2. **HTTP API token** — `dashboards:write`, `datasources:read`. Used by the query and dashboard skills. Stored in `~/.config/claude-grafana/.env`, chmod 600.
 
 Neither is a generic credential — both are scoped, stack-bound, and revocable from the Grafana Cloud access-policies UI.
 
@@ -13,7 +13,7 @@ Neither is a generic credential — both are scoped, stack-bound, and revocable 
 
 | File | Mode | Owner | Contents |
 |------|------|-------|----------|
-| `<plugin-root>/.env` | 0600 | user | HTTP API token + stack URL + datasource UIDs |
+| `~/.config/claude-grafana/.env` | 0600 | user | HTTP API token + stack URL + datasource UIDs |
 | `/etc/alloy/claude.env` (Linux) | 0600 | root (read-only by alloy user) | OTLP push token + endpoint + instance ID |
 | `~/.config/alloy/claude.env` (non-root) | 0600 | user | same as above |
 | `~/.claude/settings.json` | 0644 | user | NO TOKENS — only OTel env keys with non-secret values |
@@ -52,9 +52,9 @@ CI should run a secret-scanner (e.g. `gitleaks`, `trufflehog`) on every PR. We d
 ### HTTP API token
 
 1. Mint a new token with `dashboards:write` + `datasources:read`.
-2. Update `<plugin-root>/.env`:
+2. Update `~/.config/claude-grafana/.env`:
    ```bash
-   sed -i "s|^GRAFANA_CLOUD_API_TOKEN=.*|GRAFANA_CLOUD_API_TOKEN=glsa_NEW...|" "$CLAUDE_PLUGIN_ROOT/.env"
+   sed -i "s|^GRAFANA_CLOUD_API_TOKEN=.*|GRAFANA_CLOUD_API_TOKEN=glsa_NEW...|" ~/.config/claude-grafana/.env
    ```
 3. No restart needed — skills read `.env` on each invocation.
 4. Revoke the old token.

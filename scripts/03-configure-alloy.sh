@@ -25,18 +25,37 @@ set -euo pipefail
 . "$(cd "$(dirname "$0")" && pwd)/lib/common.sh"
 
 FORCE=0
+EXPLICIT_MODE=""
 for arg in "$@"; do
   case "$arg" in
     --force) FORCE=1 ;;
+    --mode=*) EXPLICIT_MODE="${arg#--mode=}" ;;
+    --mode)  shift || true ;;  # next arg is the value (handled below by re-loop)
   esac
+done
+# Second pass for --mode <value> form.
+prev=""
+for arg in "$@"; do
+  if [ "$prev" = "--mode" ]; then
+    EXPLICIT_MODE="$arg"
+  fi
+  prev="$arg"
 done
 
 log_step "Step 3/5: Configure Alloy"
 
 require_cmd alloy
 
-ENV_FILE="$CLAUDE_PLUGIN_ROOT/.env"
-[ -f "$ENV_FILE" ] || die ".env missing — run scripts/02-onboard-token.sh first."
+ENV_FILE="$(claude_grafana_env_file)"
+if [ ! -f "$ENV_FILE" ]; then
+  # Fall back to legacy plugin-root path during migration.
+  legacy="$CLAUDE_PLUGIN_ROOT/.env"
+  if [ -f "$legacy" ]; then
+    ENV_FILE="$legacy"
+  else
+    die ".env missing at $ENV_FILE — run /grafana-setup or scripts/02-onboard-token.sh first."
+  fi
+fi
 load_env "$ENV_FILE"
 require_env GRAFANA_CLOUD_OTLP_ENDPOINT
 require_env GRAFANA_CLOUD_OTLP_INSTANCE_ID
@@ -72,9 +91,14 @@ case "$classification" in
     Either remove the existing receiver, or change its endpoint, then re-run."
     ;;
   has-other)
-    if [ "$FORCE" -eq 1 ]; then
+    if [ -n "$EXPLICIT_MODE" ]; then
+      case "$EXPLICIT_MODE" in
+        merge|replace|skip) choice="$EXPLICIT_MODE" ;;
+        *) die "Invalid --mode value: $EXPLICIT_MODE (allowed: merge|replace|skip)" ;;
+      esac
+    elif [ "$FORCE" -eq 1 ]; then
       choice="merge"
-    else
+    elif [ -t 0 ]; then
       cat >&2 <<EOF
 
 Your existing $MAIN_CFG has unrelated Alloy components.
@@ -88,6 +112,9 @@ Three ways to add the claude pipeline:
 
 EOF
       choice="$(prompt_choice 'Choose:' 'merge' merge replace skip)"
+    else
+      die "Existing config has unrelated pipelines and no --mode flag was passed.
+Re-run with --mode=merge (recommended), --mode=replace, or --mode=skip."
     fi
     ;;
   unreadable)

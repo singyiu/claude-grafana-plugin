@@ -50,21 +50,43 @@ def plugin_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def claude_grafana_data_dir() -> Path:
+    """Stable user-state directory. Honors XDG."""
+    if (custom := os.environ.get("CLAUDE_GRAFANA_DATA_DIR")):
+        return Path(custom)
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    if xdg:
+        return Path(xdg) / "claude-grafana"
+    return Path.home() / ".config" / "claude-grafana"
+
+
+def claude_grafana_env_file() -> Path:
+    return claude_grafana_data_dir() / ".env"
+
+
 def load_env(env_file: Path | None = None) -> dict[str, str]:
-    """Load KEY=value pairs from .env. Lines starting with # ignored."""
+    """Load KEY=value pairs from .env. Lines starting with # ignored.
+
+    Default location: ~/.config/claude-grafana/.env
+    Legacy fallback (during migration): $CLAUDE_PLUGIN_ROOT/.env
+    """
     if env_file is None:
-        env_file = plugin_root() / ".env"
+        env_file = claude_grafana_env_file()
     out: dict[str, str] = dict(os.environ)
-    if not env_file.exists():
-        return out
-    for line in env_file.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
+    candidates: list[Path] = [env_file]
+    legacy = plugin_root() / ".env"
+    if legacy != env_file:
+        candidates.append(legacy)
+    for path in candidates:
+        if not path.exists():
             continue
-        if "=" not in line:
-            continue
-        k, v = line.split("=", 1)
-        out.setdefault(k.strip(), v.strip())
+        for line in path.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            out.setdefault(k.strip(), v.strip())
+        break  # first file wins
     return out
 
 
@@ -443,7 +465,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--window", help="Time window override, e.g. 5m / 1h / 7d")
     parser.add_argument("--no-confirm", action="store_true", help="Don't prompt before running matched query")
     parser.add_argument("--list-intents", action="store_true", help="Print intent table and exit")
-    parser.add_argument("--env-file", help="Path to .env (default: $CLAUDE_PLUGIN_ROOT/.env)")
+    parser.add_argument("--env-file", help="Path to .env (default: ~/.config/claude-grafana/.env)")
     args = parser.parse_args(argv)
 
     if args.list_intents:

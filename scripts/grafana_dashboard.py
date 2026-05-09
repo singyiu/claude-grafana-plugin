@@ -32,20 +32,30 @@ from typing import Any
 # Reuse env loader from the query script if available; else load inline.
 sys.path.insert(0, str(Path(__file__).parent))
 try:
-    from grafana_query import load_env, plugin_root  # type: ignore
+    from grafana_query import load_env, plugin_root, claude_grafana_env_file  # type: ignore
 except Exception:
     def plugin_root() -> Path:
         return Path(os.environ.get("CLAUDE_PLUGIN_ROOT", Path(__file__).resolve().parent.parent))
+    def claude_grafana_env_file() -> Path:
+        custom = os.environ.get("CLAUDE_GRAFANA_DATA_DIR")
+        if custom:
+            return Path(custom) / ".env"
+        xdg = os.environ.get("XDG_CONFIG_HOME")
+        if xdg:
+            return Path(xdg) / "claude-grafana" / ".env"
+        return Path.home() / ".config" / "claude-grafana" / ".env"
     def load_env(env_file: Path | None = None) -> dict[str, str]:
         if env_file is None:
-            env_file = plugin_root() / ".env"
+            env_file = claude_grafana_env_file()
         out = dict(os.environ)
-        if env_file.exists():
-            for line in env_file.read_text().splitlines():
-                line = line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    k, v = line.split("=", 1)
-                    out.setdefault(k.strip(), v.strip())
+        for path in (env_file, plugin_root() / ".env"):
+            if path.exists():
+                for line in path.read_text().splitlines():
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        out.setdefault(k.strip(), v.strip())
+                break
         return out
 
 

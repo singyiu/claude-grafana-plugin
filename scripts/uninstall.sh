@@ -15,12 +15,19 @@
 #   - the OTLP push token or HTTP API token in Grafana Cloud
 #   - the plugin checkout itself
 #
-# Pass --keep-env to preserve <plugin-root>/.env (default: leave it alone).
+# Pass --purge-env to also remove ~/.config/claude-grafana/ (default: keep it).
 
 set -euo pipefail
 
 # shellcheck disable=SC1091
 . "$(cd "$(dirname "$0")" && pwd)/lib/common.sh"
+
+PURGE_ENV=0
+for arg in "$@"; do
+  case "$arg" in
+    --purge-env) PURGE_ENV=1 ;;
+  esac
+done
 
 log_step "Uninstalling claude-grafana runtime"
 
@@ -81,6 +88,15 @@ if command -v systemctl >/dev/null 2>&1; then
   fi
 fi
 
+if [ "$PURGE_ENV" -eq 1 ]; then
+  data_dir="$(claude_grafana_data_dir)"
+  if [ -d "$data_dir" ]; then
+    log_info "Purging $data_dir (--purge-env)"
+    run_or_print rm -rf "$data_dir"
+    log_ok "Removed $data_dir"
+  fi
+fi
+
 log_ok "Uninstall complete."
 log_dim ""
 log_dim "Notes:"
@@ -89,4 +105,5 @@ log_dim "      python3 \$CLAUDE_PLUGIN_ROOT/scripts/grafana_dashboard.py list"
 log_dim "      python3 \$CLAUDE_PLUGIN_ROOT/scripts/grafana_dashboard.py delete <uid>"
 log_dim "  - Your tokens in Grafana Cloud are NOT revoked. Revoke them manually if you want:"
 log_dim "      https://grafana.com/orgs/<your-org>/access-policies"
-log_dim "  - .env preserved at \$CLAUDE_PLUGIN_ROOT/.env. Delete manually to remove tokens locally."
+log_dim "  - .env preserved at $(claude_grafana_env_file). Delete manually to remove tokens locally."
+log_dim "  - Pass --purge-env to this script to delete it."

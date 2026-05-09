@@ -81,7 +81,7 @@ Don't expect to see a metric you just emitted within 5 seconds. Round-trip is no
 
 - Alloy listens **only on 127.0.0.1**. The OTLP receiver is not reachable from other machines.
 - The OTLP push token (in `claude.env`, chmod 600) only has `metrics:write` + `logs:write` — it cannot read your stack data.
-- The HTTP API token (in `.env`, chmod 600) has `dashboards:write` + `datasources:read`. It CAN read query data and modify dashboards. Don't grant it `admin:*`.
+- The HTTP API token (in `~/.config/claude-grafana/.env`, chmod 600) has `dashboards:write` + `datasources:read`. It CAN read query data and modify dashboards. Don't grant it `admin:*`.
 - See [SECURITY.md](SECURITY.md) for rotation and incident response.
 
 ## Why no traces

@@ -63,7 +63,7 @@ The systemd drop-in step is skipped on macOS — instead, the env file is read a
 ## "I see metrics but `/grafana-query` returns no data"
 
 - Confirm metric naming. Prometheus appends `_total` to OTLP counters. The query script uses `claude_code_session_count_total`, not `claude_code.session.count`. If you wrote a raw query, check the names in `docs/METRICS.md`.
-- Confirm Mimir vs Prometheus datasource type. Both work, but the script auto-discovers; if the auto-discovered UID points at the wrong source, set `GRAFANA_CLOUD_PROM_DATASOURCE_UID` manually in `.env`.
+- Confirm Mimir vs Prometheus datasource type. Both work, but the script auto-discovers; if the auto-discovered UID points at the wrong source, set `GRAFANA_CLOUD_PROM_DATASOURCE_UID` manually in `~/.config/claude-grafana/.env`.
 
 ## "Tools showing up as `null`"
 
@@ -102,7 +102,7 @@ $CLAUDE_PLUGIN_ROOT/scripts/uninstall.sh
 claude /grafana-setup
 ```
 
-`uninstall.sh` restores the `.pre-claude-grafana.bak` files for `~/.claude/settings.json`, the Alloy main config, and the systemd drop-in. It removes `/etc/alloy/claude.alloy` and `/etc/alloy/claude.env`. Dashboards in Grafana Cloud are NOT removed — use `/grafana-dashboard list` then `/grafana-dashboard delete <uid>` for each.
+`uninstall.sh` restores the `.pre-claude-grafana.bak` files for `~/.claude/settings.json`, the Alloy main config, and the systemd drop-in. It removes `/etc/alloy/claude.alloy` and `/etc/alloy/claude.env`. By default it preserves `~/.config/claude-grafana/.env` so your tokens survive — pass `--purge-env` to also delete that. Dashboards in Grafana Cloud are NOT removed — use `/grafana-dashboard list` then `/grafana-dashboard delete <uid>` for each.
 
 ## Filing a bug
 

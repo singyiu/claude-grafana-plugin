@@ -93,7 +93,7 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Quick version: Claude Code �
 
 ## Security
 
-Tokens live in a gitignored `.env` (chmod 600). The plugin never writes tokens into version-controlled files. Rotation guidance: [`docs/SECURITY.md`](docs/SECURITY.md). For dynamic-rotation setups, point Claude Code at an `otelHeadersHelper` script — see the security doc.
+Tokens live in `~/.config/claude-grafana/.env` (chmod 600), outside the plugin cache so updates don't wipe them. The plugin never writes tokens into version-controlled files. Rotation guidance: [`docs/SECURITY.md`](docs/SECURITY.md). For dynamic-rotation setups, point Claude Code at an `otelHeadersHelper` script — see the security doc.
 
 ## Troubleshooting
 

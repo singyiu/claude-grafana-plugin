@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin.json",
   "name": "claude-grafana",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Observability for Claude Code via Grafana Cloud and the Alloy OpenTelemetry collector. Guided onboarding, baseline dashboards, and natural-language query and dashboard skills.",
   "author": {
     "name": "Sing Cheung",

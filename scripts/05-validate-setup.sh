@@ -18,8 +18,12 @@ set -euo pipefail
 
 log_step "Step 5/5: Validate end-to-end"
 
-ENV_FILE="$CLAUDE_PLUGIN_ROOT/.env"
-[ -f "$ENV_FILE" ] || die ".env missing — run /grafana-setup first."
+ENV_FILE="$(claude_grafana_env_file)"
+if [ ! -f "$ENV_FILE" ]; then
+  legacy="$CLAUDE_PLUGIN_ROOT/.env"
+  [ -f "$legacy" ] && ENV_FILE="$legacy" \
+    || die ".env missing at $ENV_FILE — run /grafana-setup first."
+fi
 load_env "$ENV_FILE"
 require_env GRAFANA_CLOUD_STACK_URL
 require_env GRAFANA_CLOUD_API_TOKEN
@@ -90,7 +94,7 @@ else
 fi
 
 # Persist UIDs back to .env so future runs skip discovery.
-if [ "$DRY_RUN" != "1" ]; then
+if [ "$DRY_RUN" != "1" ] && [ -w "$ENV_FILE" ]; then
   python3 - "$ENV_FILE" "$prom_uid" "$loki_uid" <<'PY'
 import sys, re, pathlib
 env, prom, loki = sys.argv[1], sys.argv[2], sys.argv[3]

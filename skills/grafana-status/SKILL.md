@@ -23,9 +23,13 @@ Run all four checks in parallel via shell:
 
 !`bash -c '
 set +e
+ENV_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/claude-grafana/.env"
 ROOT="${CLAUDE_PLUGIN_ROOT:-${CLAUDE_SKILL_DIR}/../..}"
-[ -f "$ROOT/.env" ] || { echo "ERROR: .env missing — run /grafana-setup."; exit 1; }
-. "$ROOT/.env"
+LEGACY="$ROOT/.env"
+if [ -f "$ENV_FILE" ]; then . "$ENV_FILE"
+elif [ -f "$LEGACY" ]; then . "$LEGACY"
+else echo "ERROR: .env missing — run /grafana-setup."; exit 1
+fi
 
 # Check 1 — Alloy systemd unit active
 if command -v systemctl >/dev/null 2>&1; then
