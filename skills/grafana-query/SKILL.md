@@ -50,7 +50,7 @@ If the user explicitly wants to run their own query:
 
 ```bash
 python3 "${CLAUDE_SKILL_DIR}/../../scripts/grafana_query.py" --raw --type prom --query 'sum(rate(claude_code_session_count_total[5m]))'
-python3 "${CLAUDE_SKILL_DIR}/../../scripts/grafana_query.py" --raw --type loki --query '{service_namespace="claude-code"} |= "PreToolUse"'
+python3 "${CLAUDE_SKILL_DIR}/../../scripts/grafana_query.py" --raw --type loki --query '{service_name="claude-code"} |= "PreToolUse"'
 ```
 
 ## Output format

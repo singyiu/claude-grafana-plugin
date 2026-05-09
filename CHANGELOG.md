@@ -4,6 +4,11 @@ All notable changes to `claude-grafana` are documented here. Format follows [Kee
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-05-08
+
+### Fixed
+- **Loki query filter**: all log queries (status check, intent table in `grafana_query.py`, `claude-tools` dashboard panels, docs/skill examples) used `{service_namespace="claude-code"}`. But Claude Code's resource attributes set `service.name=claude-code` and `service.namespace=local` — so the namespace filter never matched real telemetry. Switched everything to `{service_name="claude-code"}`. Affected: `skills/grafana-status/SKILL.md`, `skills/grafana-query/SKILL.md`, `skills/grafana-dashboard/SKILL.md`, `scripts/grafana_query.py` (5 INTENT_TABLE entries), `dashboards/claude-tools.json` (2 logs panels), `docs/METRICS.md` (5 LogQL recipes).
+
 ## [0.2.2] - 2026-05-08
 
 ### Fixed

@@ -73,7 +73,7 @@ if [ -n "$GRAFANA_CLOUD_LOKI_DATASOURCE_UID" ]; then
   end_ns=$(($(date +%s) * 1000000000))
   start_ns=$((end_ns - 300000000000))
   resp=$(curl -fsS -H "Authorization: Bearer $GRAFANA_CLOUD_API_TOKEN" \
-    --data-urlencode "query={service_namespace=\"claude-code\"}" \
+    --data-urlencode "query={service_name=\"claude-code\"}" \
     --data-urlencode "start=$start_ns" \
     --data-urlencode "end=$end_ns" \
     --data-urlencode "limit=1" \

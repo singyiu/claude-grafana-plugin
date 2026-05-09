@@ -63,7 +63,7 @@ sum(increase(claude_code_active_time_total_seconds_total[$__range])) / 60
 
 ## Log events
 
-Claude Code emits structured event records as OTel logs (one OTel log record per event). Visible in Loki under `{service_namespace="claude-code"}`. Each record carries the full set of standard attributes plus event-specific fields.
+Claude Code emits structured event records as OTel logs (one OTel log record per event). Visible in Loki under `{service_name="claude-code"}`. Each record carries the full set of standard attributes plus event-specific fields.
 
 | Event | When it fires | Notable attributes |
 |-------|---------------|---------------------|
@@ -95,19 +95,19 @@ Claude Code emits structured event records as OTel logs (one OTel log record per
 
 ```logql
 # All events in a window
-{service_namespace="claude-code"}
+{service_name="claude-code"}
 
 # Tool failures
-{service_namespace="claude-code"} |= "PostToolUseFailure" | json
+{service_name="claude-code"} |= "PostToolUseFailure" | json
 
 # All MCP server activity
-{service_namespace="claude-code"} |= "mcp_server_connection" | json
+{service_name="claude-code"} |= "mcp_server_connection" | json
 
 # Compactions with their token deltas
-{service_namespace="claude-code"} |= "compaction" | json | line_format "{{ .timestamp }} {{ .pre_tokens }}→{{ .post_tokens }} ({{ .trigger }})"
+{service_name="claude-code"} |= "compaction" | json | line_format "{{ .timestamp }} {{ .pre_tokens }}→{{ .post_tokens }} ({{ .trigger }})"
 
 # Tool failure rate per minute
-sum(rate({service_namespace="claude-code"} |= "PostToolUseFailure" [1m]))
+sum(rate({service_name="claude-code"} |= "PostToolUseFailure" [1m]))
 ```
 
 ## Notes on cardinality

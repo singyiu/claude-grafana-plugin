@@ -54,7 +54,7 @@ Native Claude Code metrics:
 
 Loki streams:
 
-- `{service_namespace="claude-code"}` — all event log records.
+- `{service_name="claude-code"}` — all event log records.
 - Filter further with `|= "<event_name>"` (e.g. `PreToolUse`, `PostToolUseFailure`, `compaction`, `mcp_server_connection`, `tool_decision`).
 - Add `| json` to extract structured fields.
 

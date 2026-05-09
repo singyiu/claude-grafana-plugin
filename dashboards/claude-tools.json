@@ -89,7 +89,7 @@
       "gridPos": { "x": 0, "y": 12, "w": 24, "h": 10 },
       "datasource": { "type": "loki", "uid": "${loki}" },
       "targets": [{
-        "expr": "{service_namespace=\"claude-code\"} |= \"PostToolUseFailure\" | json",
+        "expr": "{service_name=\"claude-code\"} |= \"PostToolUseFailure\" | json",
         "refId": "A"
       }],
       "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending" }
@@ -101,7 +101,7 @@
       "gridPos": { "x": 0, "y": 22, "w": 24, "h": 8 },
       "datasource": { "type": "loki", "uid": "${loki}" },
       "targets": [{
-        "expr": "{service_namespace=\"claude-code\"} |= \"mcp_server_connection\" | json",
+        "expr": "{service_name=\"claude-code\"} |= \"mcp_server_connection\" | json",
         "refId": "A"
       }],
       "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending" }
