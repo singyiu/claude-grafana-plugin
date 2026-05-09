@@ -4,6 +4,13 @@ All notable changes to `claude-grafana` are documented here. Format follows [Kee
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-05-08
+
+### Fixed
+- **PromQL semantics**: Claude Code emits each session as its own counter series (session_id is a label). Most session-scoped series have only ONE sample (the cumulative final value at session end), so `sum(increase(metric[window]))` returns 0 even when sessions exist. Switched all INTENT_TABLE queries from `increase()` to `last_over_time()` (sums each session's final cumulative value) for token / cost / lines / decisions / active-time, and to `count(count_over_time(...))` for one-shot event counters (sessions / commits / PRs). Status check probe similarly uses `count(count_over_time(claude_code_session_count_total[1h]))` to detect any session activity in the last hour, which is staleness-aware (Prometheus drops series after 5min of no samples by default).
+- **Status check window**: widened from 5min to 1h. The 5min default missed sessions that ended even slightly earlier.
+- **`active_time` metric name**: was `claude_code_active_time_total_seconds_total` in the intent template — Mimir actually exposes it as `claude_code_active_time_seconds_total`. Corrected.
+
 ## [0.2.3] - 2026-05-08
 
 ### Fixed

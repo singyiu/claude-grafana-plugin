@@ -54,15 +54,25 @@ else
   echo "✗ Claude Code telemetry env MISSING — fix: re-run /grafana-setup"
 fi
 
-# Check 3 — recent metric in Grafana Cloud Prometheus (last 5min)
+# Check 3 — any Claude Code session-count series with samples in the last 1h.
+# Why count_over_time and not increase: Claude Code emits per-session counter
+# series (session_id as a label). Each series typically has only one sample,
+# so increase() returns 0 even when sessions exist. count_over_time counts
+# samples per series; count(...) counts series with ≥1 sample in the window.
 if [ -n "$GRAFANA_CLOUD_API_TOKEN" ] && [ -n "$GRAFANA_CLOUD_STACK_URL" ] && [ -n "$GRAFANA_CLOUD_PROM_DATASOURCE_UID" ]; then
   resp=$(curl -fsS -H "Authorization: Bearer $GRAFANA_CLOUD_API_TOKEN" \
-    --data-urlencode "query=sum(increase(claude_code_session_count_total[5m]))" \
+    --data-urlencode "query=count(count_over_time(claude_code_session_count_total[1h]))" \
     -G "${GRAFANA_CLOUD_STACK_URL%/}/api/datasources/proxy/uid/$GRAFANA_CLOUD_PROM_DATASOURCE_UID/api/v1/query" 2>/dev/null)
-  if echo "$resp" | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get(\"data\",{}).get(\"result\") else 1)" 2>/dev/null; then
-    echo "✓ Grafana Cloud receiving metrics (last 5min)"
+  if echo "$resp" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+r = d.get('data', {}).get('result', [])
+sys.exit(0 if r and float(r[0]['value'][1]) > 0 else 1)
+" 2>/dev/null; then
+    n=$(echo "$resp" | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['result'][0]['value'][1])" 2>/dev/null)
+    echo "✓ Grafana Cloud receiving metrics ($n session series in last 1h)"
   else
-    echo "✗ No recent metrics in Grafana Cloud — fix: start a claude session, wait 60s, recheck. Or: sudo journalctl -u alloy -n 50"
+    echo "✗ No recent claude_code metrics — fix: start a claude session, wait 60s, recheck. Or: sudo journalctl -u alloy -n 50"
   fi
 else
   echo "? Cannot verify metrics — Prometheus UID unknown. Re-run /grafana-setup step 5."

@@ -106,19 +106,27 @@ class Intent:
 
 
 INTENT_TABLE: list[Intent] = [
+    # NOTE on PromQL choice: Claude Code emits per-session counter series
+    # (session_id is a label). Most session-scoped series have only ONE
+    # sample (the cumulative final value at session end), so increase() over
+    # any window returns 0. Use `last_over_time` to read each series' final
+    # cumulative value, then aggregate. For one-shot events (session.count,
+    # commit.count, lines_of_code.count), `count_over_time` is also useful
+    # for "how many events fired" semantics.
+
     # ── Sessions ────────────────────────────────────────────────────────────
     Intent(
         name="session-count-window",
         keywords=("session", "sessions", "count", "started"),
         datasource="prom",
-        query="sum(increase(claude_code_session_count_total[{window}]))",
+        query="count(count_over_time(claude_code_session_count_total[{window}]))",
         description="Total Claude Code sessions started in the window.",
     ),
     Intent(
         name="session-count-by-start-type",
         keywords=("session", "fresh", "resume", "continue", "start_type"),
         datasource="prom",
-        query="sum by (start_type) (increase(claude_code_session_count_total[{window}]))",
+        query="count by (start_type) (count_over_time(claude_code_session_count_total[{window}]))",
         description="Sessions split by how they were started (fresh / resume / continue).",
     ),
 
@@ -127,14 +135,14 @@ INTENT_TABLE: list[Intent] = [
         name="tokens-by-type",
         keywords=("token", "tokens", "input", "output", "usage"),
         datasource="prom",
-        query="sum by (type) (increase(claude_code_token_usage_tokens_total[{window}]))",
+        query="sum by (type) (last_over_time(claude_code_token_usage_tokens_total[{window}]))",
         description="Tokens consumed in the window, split by input vs output.",
     ),
     Intent(
         name="tokens-by-model",
         keywords=("token", "tokens", "model", "by model", "per model"),
         datasource="prom",
-        query="sum by (model) (increase(claude_code_token_usage_tokens_total[{window}]))",
+        query="sum by (model) (last_over_time(claude_code_token_usage_tokens_total[{window}]))",
         description="Token usage split by model.",
         default_window="7d",
     ),
@@ -144,7 +152,7 @@ INTENT_TABLE: list[Intent] = [
         name="cost-window",
         keywords=("cost", "spend", "spending", "usd", "dollar"),
         datasource="prom",
-        query="sum(increase(claude_code_cost_usage_USD_total[{window}]))",
+        query="sum(last_over_time(claude_code_cost_usage_USD_total[{window}]))",
         description="Approximate USD spent in the window (note: cost is approximate).",
         default_window="7d",
     ),
@@ -152,7 +160,7 @@ INTENT_TABLE: list[Intent] = [
         name="cost-by-model",
         keywords=("cost", "model", "by model", "per model"),
         datasource="prom",
-        query="sum by (model) (increase(claude_code_cost_usage_USD_total[{window}]))",
+        query="sum by (model) (last_over_time(claude_code_cost_usage_USD_total[{window}]))",
         description="Approximate USD spent per model in the window.",
         default_window="7d",
     ),
@@ -160,7 +168,7 @@ INTENT_TABLE: list[Intent] = [
         name="cost-trend",
         keywords=("cost", "trend", "daily", "over time"),
         datasource="prom",
-        query="sum(increase(claude_code_cost_usage_USD_total[1d]))",
+        query="sum(last_over_time(claude_code_cost_usage_USD_total[1d]))",
         description="Daily approximate cost trend over the window.",
         default_window="30d",
     ),
@@ -170,7 +178,7 @@ INTENT_TABLE: list[Intent] = [
         name="lines-of-code",
         keywords=("lines", "loc", "code", "added", "removed"),
         datasource="prom",
-        query="sum by (type) (increase(claude_code_lines_of_code_count_total[{window}]))",
+        query="sum by (type) (last_over_time(claude_code_lines_of_code_count_total[{window}]))",
         description="Lines of code added vs removed.",
         default_window="7d",
     ),
@@ -178,7 +186,7 @@ INTENT_TABLE: list[Intent] = [
         name="commits",
         keywords=("commit", "commits", "git"),
         datasource="prom",
-        query="sum(increase(claude_code_commit_count_total[{window}]))",
+        query="count(count_over_time(claude_code_commit_count_total[{window}]))",
         description="Git commits Claude Code created in the window.",
         default_window="7d",
     ),
@@ -186,7 +194,7 @@ INTENT_TABLE: list[Intent] = [
         name="pull-requests",
         keywords=("pr", "pull request", "pull requests", "prs"),
         datasource="prom",
-        query="sum(increase(claude_code_pull_request_count_total[{window}]))",
+        query="count(count_over_time(claude_code_pull_request_count_total[{window}]))",
         description="Pull requests Claude Code created in the window.",
         default_window="30d",
     ),
@@ -196,7 +204,7 @@ INTENT_TABLE: list[Intent] = [
         name="tool-decisions",
         keywords=("edit decision", "tool decision", "decisions", "approved", "denied", "permission decision", "approval rate"),
         datasource="prom",
-        query="sum by (decision, tool) (increase(claude_code_code_edit_tool_decision_count_total[{window}]))",
+        query="sum by (decision, tool) (last_over_time(claude_code_code_edit_tool_decision_count_total[{window}]))",
         description="Code-edit tool permission decisions split by tool and outcome.",
     ),
 
@@ -205,7 +213,7 @@ INTENT_TABLE: list[Intent] = [
         name="active-time",
         keywords=("active", "how long", "engagement", "active time", "duration"),
         datasource="prom",
-        query="sum(increase(claude_code_active_time_total_seconds_total[{window}])) / 60",
+        query="sum(last_over_time(claude_code_active_time_seconds_total[{window}])) / 60",
         description="Total active minutes in the window.",
         default_window="7d",
     ),
