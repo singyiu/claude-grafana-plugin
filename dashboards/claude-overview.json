@@ -1,11 +1,11 @@
 {
   "uid": "claude-grafana-overview",
   "title": "Claude Code — Overview",
-  "description": "Top-level health of Claude Code activity: sessions, tokens, cost, lines of code.",
+  "description": "Top-level health of Claude Code activity: sessions, tokens, cost, lines of code. Designed for Claude Code's per-session counter emission pattern (each session_id is a separate series).",
   "tags": ["claude-grafana", "overview"],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "1m",
   "time": { "from": "now-24h", "to": "now" },
   "templating": {
@@ -29,7 +29,7 @@
       "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [{
-        "expr": "sum(increase(claude_code_session_count_total[$__range]))",
+        "expr": "count(count_over_time(claude_code_session_count_total[$__range]))",
         "refId": "A",
         "legendFormat": "sessions"
       }],
@@ -46,7 +46,7 @@
       "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [{
-        "expr": "sum(increase(claude_code_cost_usage_USD_total[$__range]))",
+        "expr": "sum(last_over_time(claude_code_cost_usage_USD_total[$__range]))",
         "refId": "A",
         "legendFormat": "USD"
       }],
@@ -63,7 +63,7 @@
       "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [{
-        "expr": "sum(increase(claude_code_token_usage_tokens_total[$__range]))",
+        "expr": "sum(last_over_time(claude_code_token_usage_tokens_total[$__range]))",
         "refId": "A",
         "legendFormat": "tokens"
       }],
@@ -80,7 +80,7 @@
       "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [{
-        "expr": "sum(increase(claude_code_active_time_total_seconds_total[$__range])) / 60",
+        "expr": "sum(last_over_time(claude_code_active_time_seconds_total[$__range])) / 60",
         "refId": "A",
         "legendFormat": "min"
       }],
@@ -93,24 +93,25 @@
     {
       "id": 5,
       "type": "timeseries",
-      "title": "Sessions over time (by start_type)",
+      "title": "Sessions started over time (by start_type)",
+      "description": "Counts new session series per bucket. Uses count_over_time because each session is its own counter series with one sample.",
       "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [{
-        "expr": "sum by (start_type) (rate(claude_code_session_count_total[5m]))",
+        "expr": "sum by (start_type) (count_over_time(claude_code_session_count_total[$__interval]))",
         "refId": "A",
         "legendFormat": "{{start_type}}"
       }],
-      "fieldConfig": { "defaults": { "unit": "ops" } }
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "bars", "stacking": { "mode": "normal" } } } }
     },
     {
       "id": 6,
       "type": "timeseries",
-      "title": "Tokens by type",
+      "title": "Tokens by type (cumulative final values per session)",
       "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [{
-        "expr": "sum by (type) (rate(claude_code_token_usage_tokens_total[5m]))",
+        "expr": "sum by (type) (last_over_time(claude_code_token_usage_tokens_total[$__interval]))",
         "refId": "A",
         "legendFormat": "{{type}}"
       }],
@@ -119,15 +120,15 @@
     {
       "id": 7,
       "type": "timeseries",
-      "title": "Cost over time (USD/hour)",
+      "title": "Cost per bucket (USD)",
       "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [{
-        "expr": "sum(rate(claude_code_cost_usage_USD_total[5m])) * 3600",
+        "expr": "sum(last_over_time(claude_code_cost_usage_USD_total[$__interval]))",
         "refId": "A",
-        "legendFormat": "USD/hour"
+        "legendFormat": "USD"
       }],
-      "fieldConfig": { "defaults": { "unit": "currencyUSD" } }
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "custom": { "drawStyle": "bars" } } }
     },
     {
       "id": 8,
@@ -136,7 +137,7 @@
       "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [{
-        "expr": "sum by (type) (rate(claude_code_lines_of_code_count_total[5m]))",
+        "expr": "sum by (type) (last_over_time(claude_code_lines_of_code_count_total[$__interval]))",
         "refId": "A",
         "legendFormat": "{{type}}"
       }],

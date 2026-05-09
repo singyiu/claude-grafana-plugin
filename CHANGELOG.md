@@ -4,6 +4,22 @@ All notable changes to `claude-grafana` are documented here. Format follows [Kee
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-05-08
+
+### Fixed
+- **Baseline dashboards rebuilt** with the same PromQL fix as v0.2.4 applied to the panel queries. All three (`claude-overview`, `claude-cost`, `claude-tools`) used `increase()` and `rate()` over per-session counter series, which return zero when each session has only one sample. Now use `count(count_over_time(...))` for "how many" semantics and `sum(last_over_time(...))` for cumulative-total semantics. Time-series panels switched from `rate()` to bucketed `last_over_time(metric[$__interval])` and bar-chart drawing where appropriate.
+- `claude_code_active_time_seconds_total` corrected (was `claude_code_active_time_total_seconds_total`).
+- `claude-tools.json` Loki panels already had the `service_name` selector from v0.2.3.
+
+### Action required (existing users)
+After updating to v0.2.5, re-deploy the dashboards into your stack:
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/grafana_dashboard.py install-baseline
+```
+
+This overwrites by `uid`, so any local edits you made to the baseline dashboards in Grafana will be reverted. Save personal copies via "Save As" if you want to keep them.
+
 ## [0.2.4] - 2026-05-08
 
 ### Fixed

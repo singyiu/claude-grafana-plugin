@@ -1,11 +1,11 @@
 {
   "uid": "claude-grafana-cost",
   "title": "Claude Code — Cost",
-  "description": "Approximate cost analysis. Use API provider billing for canonical numbers.",
+  "description": "Approximate cost analysis. Use API provider billing for canonical numbers. Designed for Claude Code's per-session counter emission pattern.",
   "tags": ["claude-grafana", "cost"],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "5m",
   "time": { "from": "now-30d", "to": "now" },
   "templating": {
@@ -39,7 +39,7 @@
       "gridPos": { "x": 0, "y": 0, "w": 8, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [{
-        "expr": "sum(increase(claude_code_cost_usage_USD_total{model=~\"$model\"}[$__range]))",
+        "expr": "sum(last_over_time(claude_code_cost_usage_USD_total{model=~\"$model\"}[$__range]))",
         "refId": "A",
         "legendFormat": "USD"
       }],
@@ -52,7 +52,7 @@
       "gridPos": { "x": 8, "y": 0, "w": 8, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [{
-        "expr": "sum(increase(claude_code_cost_usage_USD_total{model=~\"$model\"}[$__range])) / clamp_min(sum(increase(claude_code_session_count_total[$__range])), 1)",
+        "expr": "sum(last_over_time(claude_code_cost_usage_USD_total{model=~\"$model\"}[$__range])) / clamp_min(count(count_over_time(claude_code_session_count_total[$__range])), 1)",
         "refId": "A",
         "legendFormat": "USD/session"
       }],
@@ -65,7 +65,7 @@
       "gridPos": { "x": 16, "y": 0, "w": 8, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [{
-        "expr": "sum(increase(claude_code_cost_usage_USD_total{model=~\"$model\"}[$__range])) / clamp_min(sum(increase(claude_code_token_usage_tokens_total{model=~\"$model\"}[$__range])) / 1e6, 1)",
+        "expr": "sum(last_over_time(claude_code_cost_usage_USD_total{model=~\"$model\"}[$__range])) / clamp_min(sum(last_over_time(claude_code_token_usage_tokens_total{model=~\"$model\"}[$__range])) / 1e6, 1)",
         "refId": "A",
         "legendFormat": "USD/1M tokens"
       }],
@@ -78,7 +78,7 @@
       "gridPos": { "x": 0, "y": 4, "w": 24, "h": 9 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [{
-        "expr": "sum by (model) (increase(claude_code_cost_usage_USD_total{model=~\"$model\"}[1d]))",
+        "expr": "sum by (model) (last_over_time(claude_code_cost_usage_USD_total{model=~\"$model\"}[1d]))",
         "refId": "A",
         "legendFormat": "{{model}}"
       }],
@@ -91,7 +91,7 @@
       "gridPos": { "x": 0, "y": 13, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [{
-        "expr": "sum by (model) (increase(claude_code_cost_usage_USD_total[$__range]))",
+        "expr": "sum by (model) (last_over_time(claude_code_cost_usage_USD_total[$__range]))",
         "refId": "A",
         "legendFormat": "{{model}}",
         "instant": true,
@@ -102,19 +102,19 @@
     {
       "id": 6,
       "type": "timeseries",
-      "title": "Tokens vs cost trend",
+      "title": "Tokens vs cost per bucket",
       "gridPos": { "x": 12, "y": 13, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [
         {
-          "expr": "sum(rate(claude_code_token_usage_tokens_total[5m]))",
+          "expr": "sum(last_over_time(claude_code_token_usage_tokens_total{model=~\"$model\"}[$__interval]))",
           "refId": "A",
-          "legendFormat": "tokens/s"
+          "legendFormat": "tokens"
         },
         {
-          "expr": "sum(rate(claude_code_cost_usage_USD_total[5m])) * 3600",
+          "expr": "sum(last_over_time(claude_code_cost_usage_USD_total{model=~\"$model\"}[$__interval]))",
           "refId": "B",
-          "legendFormat": "USD/hour"
+          "legendFormat": "USD"
         }
       ]
     }

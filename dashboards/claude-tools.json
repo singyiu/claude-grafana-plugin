@@ -1,11 +1,11 @@
 {
   "uid": "claude-grafana-tools",
   "title": "Claude Code — Tools",
-  "description": "Tool-call patterns, edit-tool decisions, and tool-call failures.",
+  "description": "Tool-call patterns, edit-tool decisions, and tool-call failures. Designed for Claude Code's per-session counter emission pattern.",
   "tags": ["claude-grafana", "tools"],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "1m",
   "time": { "from": "now-6h", "to": "now" },
   "templating": {
@@ -36,7 +36,7 @@
       "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [{
-        "expr": "sum(increase(claude_code_code_edit_tool_decision_count_total[$__range]))",
+        "expr": "sum(last_over_time(claude_code_code_edit_tool_decision_count_total[$__range]))",
         "refId": "A",
         "legendFormat": "decisions"
       }],
@@ -49,7 +49,7 @@
       "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [{
-        "expr": "100 * sum(increase(claude_code_code_edit_tool_decision_count_total{decision=\"accept\"}[$__range])) / clamp_min(sum(increase(claude_code_code_edit_tool_decision_count_total[$__range])), 1)",
+        "expr": "100 * sum(last_over_time(claude_code_code_edit_tool_decision_count_total{decision=\"accept\"}[$__range])) / clamp_min(sum(last_over_time(claude_code_code_edit_tool_decision_count_total[$__range])), 1)",
         "refId": "A",
         "legendFormat": "%"
       }],
@@ -62,7 +62,7 @@
       "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [{
-        "expr": "sum by (tool, decision) (increase(claude_code_code_edit_tool_decision_count_total[$__range]))",
+        "expr": "sum by (tool, decision) (last_over_time(claude_code_code_edit_tool_decision_count_total[$__range]))",
         "refId": "A",
         "legendFormat": "{{tool}} / {{decision}}",
         "format": "table",
@@ -72,15 +72,15 @@
     {
       "id": 4,
       "type": "timeseries",
-      "title": "Edit-tool decisions over time",
+      "title": "Edit-tool decisions per bucket",
       "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [{
-        "expr": "sum by (decision) (rate(claude_code_code_edit_tool_decision_count_total[5m]))",
+        "expr": "sum by (decision) (last_over_time(claude_code_code_edit_tool_decision_count_total[$__interval]))",
         "refId": "A",
         "legendFormat": "{{decision}}"
       }],
-      "fieldConfig": { "defaults": { "unit": "ops" } }
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "bars", "stacking": { "mode": "normal" } } } }
     },
     {
       "id": 5,
