@@ -332,12 +332,34 @@ class GrafanaClient:
         if self.prom_uid and self.loki_uid:
             return
         data = self._get(f"{self.stack}/api/datasources")
-        for ds in data:
-            t = ds.get("type", "")
-            if not self.prom_uid and t in ("prometheus", "grafana-prometheus-datasource"):
-                self.prom_uid = ds.get("uid", "")
-            if not self.loki_uid and t in ("loki", "grafana-loki-datasource"):
-                self.loki_uid = ds.get("uid", "")
+        if not isinstance(data, list):
+            return
+        prom_cands = [d for d in data if d.get("type") in ("prometheus", "grafana-prometheus-datasource")]
+        loki_cands = [d for d in data if d.get("type") in ("loki", "grafana-loki-datasource")]
+
+        # Prefer primary metrics datasource (not usage / cardinality).
+        if not self.prom_uid and prom_cands:
+            preferred = [d for d in prom_cands
+                         if "usage" not in d.get("uid", "").lower()
+                         and "cardinality" not in d.get("uid", "").lower()]
+            chosen = preferred or prom_cands
+            self.prom_uid = chosen[0].get("uid", "")
+
+        # Grafana Cloud has 3 Loki datasources; prefer the actual logs one
+        # over alert-state-history / usage-insights.
+        def loki_score(ds: dict) -> int:
+            uid = ds.get("uid", "").lower()
+            name = ds.get("name", "").lower()
+            if "alert-state-history" in uid or "alert-state-history" in name:
+                return -10
+            if "usage-insights" in uid or "usage-insights" in name:
+                return -5
+            if uid.endswith("-logs") or name.endswith("-logs") or "logs" in uid:
+                return 10
+            return 0
+        if not self.loki_uid and loki_cands:
+            ranked = sorted(loki_cands, key=loki_score, reverse=True)
+            self.loki_uid = ranked[0].get("uid", "")
 
     def query_prom(self, expr: str, window: str = "1h") -> dict[str, Any]:
         self.discover_datasources()

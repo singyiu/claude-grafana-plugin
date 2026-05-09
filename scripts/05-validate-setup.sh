@@ -69,18 +69,26 @@ ds_json="$(curl -fsS -H "Authorization: Bearer $GRAFANA_CLOUD_API_TOKEN" \
 prom_uid="$(printf '%s' "$ds_json" | python3 -c '
 import json, sys
 data = json.load(sys.stdin)
-for ds in data:
-    if ds.get("type") in ("prometheus", "grafana-prometheus-datasource"):
-        print(ds["uid"])
-        break
+candidates = [d for d in data if d.get("type") in ("prometheus", "grafana-prometheus-datasource")]
+# Prefer datasources that look like primary metrics (not "usage" / "cardinality")
+preferred = [d for d in candidates if "usage" not in d.get("uid", "").lower() and "cardinality" not in d.get("uid", "").lower()]
+chosen = (preferred or candidates)[:1]
+print(chosen[0]["uid"] if chosen else "")
 ')"
 loki_uid="$(printf '%s' "$ds_json" | python3 -c '
 import json, sys
 data = json.load(sys.stdin)
-for ds in data:
-    if ds.get("type") in ("loki", "grafana-loki-datasource"):
-        print(ds["uid"])
-        break
+candidates = [d for d in data if d.get("type") in ("loki", "grafana-loki-datasource")]
+# Grafana Cloud has 3 Loki datasources; prefer the actual logs one over
+# alert-state-history / usage-insights.
+def score(ds):
+    uid, name = ds.get("uid", "").lower(), ds.get("name", "").lower()
+    if "alert-state-history" in uid or "alert-state-history" in name: return -10
+    if "usage-insights" in uid or "usage-insights" in name: return -5
+    if uid.endswith("-logs") or name.endswith("-logs") or "logs" in uid: return 10
+    return 0
+ranked = sorted(candidates, key=score, reverse=True)
+print(ranked[0]["uid"] if ranked else "")
 ')"
 
 if [ -z "$prom_uid" ]; then

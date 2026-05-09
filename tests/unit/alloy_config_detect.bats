@@ -124,3 +124,42 @@ EOF
   [ "$status" -eq 0 ]
   [ "$output" = "has-other" ]
 }
+
+@test "claude-grafana managed fence → 'has-claude'" {
+  cat > "$TMP/fenced.alloy" <<'EOF'
+prometheus.scrape "default" { targets = [] forward_to = [] }
+
+// >>> claude-grafana managed BEGIN — do not edit by hand
+otelcol.receiver.otlp "claude_code" {
+  grpc { endpoint = "127.0.0.1:4317" }
+  output { metrics = [] logs = [] }
+}
+// <<< claude-grafana managed END
+EOF
+  run "$SCRIPT" "$TMP/fenced.alloy"
+  [ "$status" -eq 0 ]
+  [ "$output" = "has-claude" ]
+}
+
+@test "legacy v0.1.x import.file claude → 'has-claude'" {
+  cat > "$TMP/legacy.alloy" <<'EOF'
+prometheus.scrape "default" { targets = [] forward_to = [] }
+import.file "claude" { filename = "/etc/alloy/claude.alloy" }
+EOF
+  run "$SCRIPT" "$TMP/legacy.alloy"
+  [ "$status" -eq 0 ]
+  [ "$output" = "has-claude" ]
+}
+
+@test "legacy v0.1.x inline claude_code receiver → 'has-claude'" {
+  cat > "$TMP/legacy-inline.alloy" <<'EOF'
+prometheus.scrape "default" { targets = [] forward_to = [] }
+otelcol.receiver.otlp "claude_code" {
+  grpc { endpoint = "127.0.0.1:4317" }
+  output { metrics = [] logs = [] }
+}
+EOF
+  run "$SCRIPT" "$TMP/legacy-inline.alloy"
+  [ "$status" -eq 0 ]
+  [ "$output" = "has-claude" ]
+}

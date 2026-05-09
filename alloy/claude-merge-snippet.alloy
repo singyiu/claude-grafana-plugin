@@ -1,13 +1,14 @@
-// claude-grafana :: paste this into your existing config.alloy if you chose
-// "skip" during /grafana-setup. The setup script normally drops a separate
-// claude.alloy module file and adds an `import.file` line for you. This
-// snippet is the manual alternative.
+// claude-grafana :: paste this block into your existing /etc/alloy/config.alloy
+// if you chose --mode=skip during /grafana-setup. The setup script normally
+// inserts this fenced section automatically and re-renders it on re-run.
 //
-// Required env:
+// Required env vars (set via /etc/alloy/claude.env, sourced by a systemd
+// drop-in that the plugin installs):
 //   GRAFANA_CLOUD_OTLP_ENDPOINT
 //   GRAFANA_CLOUD_OTLP_INSTANCE_ID
 //   GRAFANA_CLOUD_OTLP_API_TOKEN
 
+// >>> claude-grafana managed BEGIN — do not edit by hand
 otelcol.receiver.otlp "claude_code" {
   grpc { endpoint = "127.0.0.1:4317" }
   http { endpoint = "127.0.0.1:4318" }
@@ -35,3 +36,4 @@ otelcol.auth.basic "claude_grafana" {
   username = sys.env("GRAFANA_CLOUD_OTLP_INSTANCE_ID")
   password = sys.env("GRAFANA_CLOUD_OTLP_API_TOKEN")
 }
+// <<< claude-grafana managed END

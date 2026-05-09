@@ -1,101 +1,105 @@
 #!/usr/bin/env bash
-# Install or merge the claude.alloy module into the running Alloy config.
+# Configure the running Alloy collector to receive Claude Code OTLP and
+# forward to Grafana Cloud.
 #
-# Strategy depends on classification of the existing config (alloy_config_detect.sh):
+# Architecture (v0.2.1+): the OTel pipeline lives in a *marker-fenced
+# section* directly inside the main config file. Markers:
+#   // >>> claude-grafana managed BEGIN
+#   ...components...
+#   // <<< claude-grafana managed END
+# Re-running the script does an in-place replace of the section. Old v0.1.x
+# installs that used `import.file "claude" {...}` are detected and migrated
+# (the import line + the orphan /etc/alloy/claude.alloy file are removed).
 #
-#   missing   → write fresh config.alloy that just imports claude.alloy
-#   empty     → same as missing
-#   has-claude → re-write claude.alloy (idempotent), do not touch main config
-#   has-otlp  → ABORT with a clear error: would conflict on 127.0.0.1:4317
-#   has-other → ask user: merge / replace / skip
-#   unreadable → ABORT with permission hint
+# Modes (--mode):
+#   merge    (default for has-other) — append/replace the fenced section in
+#            the existing config; non-destructive to other components.
+#   replace  — back up existing config, write a config that contains ONLY
+#            the fenced section.
+#   skip     — print the snippet for manual paste.
 #
-# Always:
-#   - back up main config + claude.alloy + systemd drop-in to .pre-claude-grafana.bak
-#   - render claude.alloy from claude.alloy.tmpl with VERSION substituted
-#   - install systemd drop-in pointing to /etc/alloy/claude.env
-#   - alloy fmt + alloy run --check before reload
-#   - rollback on validation failure
-#
-# Honors --force to skip the merge prompt and always merge.
+# Sudo: the script needs sudo to write to /etc/alloy/. It checks `sudo -n`
+# is primed up front and aborts with a clear message if not.
 
 set -euo pipefail
 
 # shellcheck disable=SC1091
 . "$(cd "$(dirname "$0")" && pwd)/lib/common.sh"
 
-FORCE=0
+# ── Args ────────────────────────────────────────────────────────────────────
 EXPLICIT_MODE=""
-for arg in "$@"; do
-  case "$arg" in
-    --force) FORCE=1 ;;
-    --mode=*) EXPLICIT_MODE="${arg#--mode=}" ;;
-    --mode)  shift || true ;;  # next arg is the value (handled below by re-loop)
-  esac
-done
-# Second pass for --mode <value> form.
+FORCE=0
 prev=""
 for arg in "$@"; do
-  if [ "$prev" = "--mode" ]; then
-    EXPLICIT_MODE="$arg"
-  fi
+  case "$arg" in
+    --force)        FORCE=1 ;;
+    --mode=*)       EXPLICIT_MODE="${arg#--mode=}" ;;
+    --mode)         ;;  # next iter sets it
+  esac
+  if [ "$prev" = "--mode" ]; then EXPLICIT_MODE="$arg"; fi
   prev="$arg"
 done
+case "$EXPLICIT_MODE" in
+  ""|merge|replace|skip) ;;
+  *) die "Invalid --mode value: $EXPLICIT_MODE (allowed: merge|replace|skip)" ;;
+esac
 
 log_step "Step 3/5: Configure Alloy"
 
 require_cmd alloy
 
+# ── Env ─────────────────────────────────────────────────────────────────────
 ENV_FILE="$(claude_grafana_env_file)"
 if [ ! -f "$ENV_FILE" ]; then
-  # Fall back to legacy plugin-root path during migration.
   legacy="$CLAUDE_PLUGIN_ROOT/.env"
-  if [ -f "$legacy" ]; then
-    ENV_FILE="$legacy"
-  else
-    die ".env missing at $ENV_FILE — run /grafana-setup or scripts/02-onboard-token.sh first."
-  fi
+  [ -f "$legacy" ] && ENV_FILE="$legacy" \
+    || die ".env missing at $ENV_FILE — run /grafana-setup or scripts/02-onboard-token.sh first."
 fi
 load_env "$ENV_FILE"
-require_env GRAFANA_CLOUD_OTLP_ENDPOINT
-require_env GRAFANA_CLOUD_OTLP_INSTANCE_ID
-require_env GRAFANA_CLOUD_OTLP_API_TOKEN
 
+# ── Paths ───────────────────────────────────────────────────────────────────
 MAIN_CFG="$(alloy_config_path)"
-MOD_CFG="$(alloy_module_path)"
 ENV_DROPIN="$(alloy_envfile_path)"
 SD_DROPIN="/etc/systemd/system/alloy.service.d/claude.conf"
 TMPL="$CLAUDE_PLUGIN_ROOT/alloy/claude.alloy.tmpl"
+LEGACY_MOD="$(dirname "$MAIN_CFG")/claude.alloy"
 
 VERSION="$(json_get "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json" '.version' || echo 'unknown')"
 
 log_dim "Main config: $MAIN_CFG"
-log_dim "Module:      $MOD_CFG"
 log_dim "Env file:    $ENV_DROPIN"
 log_dim "SD dropin:   $SD_DROPIN (linux-only)"
 
+# ── Sudo preflight ──────────────────────────────────────────────────────────
+if alloy_needs_sudo; then
+  if ! sudo -n true 2>/dev/null; then
+    die "Step 3 needs sudo to write to /etc/alloy/. In your terminal, run:
+        sudo -v
+    to cache credentials, then re-run this step. (sudo's tty_tickets prevents
+    me from prompting for a password from this shell.)"
+  fi
+fi
+
+# ── Classify ────────────────────────────────────────────────────────────────
 classification="$("$CLAUDE_PLUGIN_ROOT/scripts/alloy_config_detect.sh" "$MAIN_CFG")"
 log_info "Existing config classification: $classification"
 
 choice=""
 case "$classification" in
   missing|empty)
-    choice="replace"
+    choice="${EXPLICIT_MODE:-replace}"
     ;;
   has-claude)
-    log_ok "Existing config already imports claude.alloy. Re-rendering module only."
-    choice="module-only"
+    # Re-render the fenced section. --mode honored if given.
+    choice="${EXPLICIT_MODE:-merge}"
     ;;
   has-otlp)
-    die "Existing config declares an otelcol.receiver.otlp on 127.0.0.1:4317. Would conflict.
-    Either remove the existing receiver, or change its endpoint, then re-run."
+    die "Existing config declares an otelcol.receiver.otlp on 127.0.0.1:4317 NOT scoped to claude.
+    Either remove that receiver or change its endpoint, then re-run."
     ;;
   has-other)
     if [ -n "$EXPLICIT_MODE" ]; then
-      case "$EXPLICIT_MODE" in
-        merge|replace|skip) choice="$EXPLICIT_MODE" ;;
-        *) die "Invalid --mode value: $EXPLICIT_MODE (allowed: merge|replace|skip)" ;;
-      esac
+      choice="$EXPLICIT_MODE"
     elif [ "$FORCE" -eq 1 ]; then
       choice="merge"
     elif [ -t 0 ]; then
@@ -104,182 +108,248 @@ case "$classification" in
 Your existing $MAIN_CFG has unrelated Alloy components.
 Three ways to add the claude pipeline:
 
-  merge   - drop a separate claude.alloy module and add ONE import.file line
-            to your main config. NON-DESTRUCTIVE. Recommended.
-  replace - back up your main config and replace it with a claude-only one.
-            DESTRUCTIVE. Existing pipelines will stop running.
-  skip    - print the snippet and let you paste it manually.
+  merge   - append a fenced section to the existing config. NON-DESTRUCTIVE.
+  replace - back up the existing config and write a claude-only one. DESTRUCTIVE.
+  skip    - print the snippet for manual paste.
 
 EOF
       choice="$(prompt_choice 'Choose:' 'merge' merge replace skip)"
     else
-      die "Existing config has unrelated pipelines and no --mode flag was passed.
+      die "Existing config has unrelated pipelines and no --mode was passed.
 Re-run with --mode=merge (recommended), --mode=replace, or --mode=skip."
     fi
     ;;
+  perms-blocked)
+    die "Cannot read $MAIN_CFG. Run 'sudo -v' first to cache credentials."
+    ;;
   unreadable)
-    die "Cannot read $MAIN_CFG. Re-run with sudo or fix permissions."
+    die "$MAIN_CFG exists but cannot be read. Fix permissions or re-run with sudo."
     ;;
   *)
     die "Unknown classification: $classification"
     ;;
 esac
 
-# ── Render claude.alloy module ────────────────────────────────────────────
-render_module() {
-  local out="$1"
-  local rendered
-  rendered="$(sed "s/{{VERSION}}/$VERSION/g" "$TMPL")"
-  log_info "Writing module: $out"
-  if [ "$DRY_RUN" = "1" ]; then
-    log_dim "  [dry-run] would write $out:"
-    printf '%s\n' "$rendered" | sed 's/^/    /' >&2
-    return 0
-  fi
+# ── Render the fenced section ──────────────────────────────────────────────
+RENDERED_FENCE="$(sed "s/{{VERSION}}/$VERSION/g" "$TMPL")"
+
+# ── Helpers ─────────────────────────────────────────────────────────────────
+run_priv() {
+  # Run a command with sudo if needed to write to /etc/alloy/.
   if alloy_needs_sudo; then
-    printf '%s\n' "$rendered" | maybe_sudo tee "$out" >/dev/null
-    maybe_sudo chmod 0644 "$out"
+    run_or_print sudo "$@"
   else
-    ensure_dir "$(dirname "$out")"
-    printf '%s\n' "$rendered" >"$out"
-    chmod 0644 "$out"
+    run_or_print "$@"
   fi
 }
 
-# ── Render claude.env (env file for systemd drop-in) ──────────────────────
+# Write content to a destination path with optional mode + group.
+# Usage: write_priv <dest> <mode> <group?>  (content on stdin)
+write_priv() {
+  local dest="$1" mode="${2:-0644}" grp="${3:-}"
+  if [ "$DRY_RUN" = "1" ]; then
+    log_dim "  [dry-run] would write $dest (mode $mode${grp:+, group $grp})"
+    cat >/dev/null
+    return 0
+  fi
+  if alloy_needs_sudo; then
+    sudo mkdir -p "$(dirname "$dest")"
+    sudo tee "$dest" >/dev/null
+    sudo chmod "$mode" "$dest"
+    [ -n "$grp" ] && sudo chgrp "$grp" "$dest" 2>/dev/null || true
+  else
+    ensure_dir "$(dirname "$dest")"
+    cat >"$dest"
+    chmod "$mode" "$dest"
+    [ -n "$grp" ] && chgrp "$grp" "$dest" 2>/dev/null || true
+  fi
+}
+
+# Read a (possibly perms-blocked) file via sudo if needed.
+read_priv() {
+  local p="$1"
+  if [ -r "$p" ]; then
+    cat "$p"
+  elif sudo -n test -r "$p" 2>/dev/null; then
+    sudo -n cat "$p"
+  else
+    return 1
+  fi
+}
+
+# Backup with .pre-claude-grafana.bak, idempotent.
+backup_priv() {
+  local f="$1" b="${1}${BACKUP_SUFFIX}"
+  if ! sudo -n test -e "$f" 2>/dev/null && [ ! -e "$f" ]; then return 0; fi
+  if sudo -n test -e "$b" 2>/dev/null || [ -e "$b" ]; then
+    log_dim "Backup already exists: $b"
+    return 0
+  fi
+  if [ "$DRY_RUN" = "1" ]; then
+    log_dim "  [dry-run] would back up $f -> $b"
+    return 0
+  fi
+  if alloy_needs_sudo; then
+    sudo cp -p "$f" "$b"
+  else
+    cp -p "$f" "$b"
+  fi
+  log_ok "Backed up $f -> $b"
+}
+
+# ── Render artifacts ────────────────────────────────────────────────────────
 render_envfile() {
-  local out="$1"
   local content
   content="$(cat <<EOF
-# Generated by claude-grafana on $(date -Iseconds). chmod 600.
+# Generated by claude-grafana on $(date -Iseconds). Do not edit by hand.
+# chmod 0640, group=$(alloy_service_group || echo alloy).
 GRAFANA_CLOUD_OTLP_ENDPOINT=$GRAFANA_CLOUD_OTLP_ENDPOINT
 GRAFANA_CLOUD_OTLP_INSTANCE_ID=$GRAFANA_CLOUD_OTLP_INSTANCE_ID
 GRAFANA_CLOUD_OTLP_API_TOKEN=$GRAFANA_CLOUD_OTLP_API_TOKEN
 EOF
 )"
-  log_info "Writing env file: $out"
-  if [ "$DRY_RUN" = "1" ]; then
-    log_dim "  [dry-run] would write $out (chmod 600)"
-    return 0
-  fi
-  if alloy_needs_sudo; then
-    printf '%s\n' "$content" | maybe_sudo tee "$out" >/dev/null
-    maybe_sudo chmod 0600 "$out"
-  else
-    ensure_dir "$(dirname "$out")"
-    printf '%s\n' "$content" >"$out"
-    chmod 0600 "$out"
-  fi
+  log_info "Writing env file: $ENV_DROPIN"
+  printf '%s\n' "$content" | write_priv "$ENV_DROPIN" 0640 "$(alloy_service_group)"
 }
 
-# ── Render systemd drop-in ────────────────────────────────────────────────
 render_systemd_dropin() {
   if ! command -v systemctl >/dev/null 2>&1; then
     log_dim "systemctl not present — skipping systemd drop-in."
     return 0
   fi
-  local out="$1"
-  local content
-  content="$(cat <<EOF
-# Generated by claude-grafana. Adds env file for the OTLP exporter.
+  log_info "Writing systemd drop-in: $SD_DROPIN"
+  cat <<EOF | write_priv "$SD_DROPIN" 0644
+# Generated by claude-grafana. Sources $ENV_DROPIN for OTLP credentials.
 [Service]
 EnvironmentFile=$ENV_DROPIN
 EOF
-)"
-  log_info "Writing systemd drop-in: $out"
-  if [ "$DRY_RUN" = "1" ]; then
-    log_dim "  [dry-run] would write $out and run systemctl daemon-reload"
-    return 0
-  fi
-  maybe_sudo mkdir -p "$(dirname "$out")"
-  printf '%s\n' "$content" | maybe_sudo tee "$out" >/dev/null
-  maybe_sudo systemctl daemon-reload
-}
-
-# ── Main config write strategies ──────────────────────────────────────────
-write_replace_main() {
-  backup_file "$MAIN_CFG"
-  local content
-  content="$(cat <<EOF
-// Generated by claude-grafana on $(date -Iseconds).
-// To add other Alloy pipelines, append components below the import.file.
-
-import.file "claude" {
-  filename = "$MOD_CFG"
-}
-EOF
-)"
-  if [ "$DRY_RUN" = "1" ]; then
-    log_dim "  [dry-run] would write $MAIN_CFG"
-    return 0
-  fi
-  if alloy_needs_sudo; then
-    printf '%s\n' "$content" | maybe_sudo tee "$MAIN_CFG" >/dev/null
-    maybe_sudo chmod 0644 "$MAIN_CFG"
-  else
-    ensure_dir "$(dirname "$MAIN_CFG")"
-    printf '%s\n' "$content" >"$MAIN_CFG"
-    chmod 0644 "$MAIN_CFG"
-  fi
-  log_ok "Replaced $MAIN_CFG with claude-only config."
-}
-
-write_merge_main() {
-  backup_file "$MAIN_CFG"
-  local marker="// claude-grafana: import managed by /grafana-setup"
-  local import_line="import.file \"claude\" { filename = \"$MOD_CFG\" }"
-  if grep -q "$marker" "$MAIN_CFG" 2>/dev/null; then
-    log_dim "Import line already present. Idempotent — no main-config edit."
-    return 0
-  fi
-  log_info "Appending import.file line to $MAIN_CFG"
-  if [ "$DRY_RUN" = "1" ]; then
-    log_dim "  [dry-run] would append:"
-    log_dim "    $marker"
-    log_dim "    $import_line"
-    return 0
-  fi
-  if alloy_needs_sudo; then
-    printf '\n%s\n%s\n' "$marker" "$import_line" | maybe_sudo tee -a "$MAIN_CFG" >/dev/null
-  else
-    printf '\n%s\n%s\n' "$marker" "$import_line" >>"$MAIN_CFG"
+  if [ "$DRY_RUN" != "1" ]; then
+    run_priv systemctl daemon-reload
   fi
 }
 
-print_skip_snippet() {
-  cat >&2 <<EOF
+# Write the fenced section into the main config.
+# Three behaviors based on $choice and current content:
+#   replace  : main = just the fence
+#   merge    : if main has a fence, replace it in place; else append fence
+#   skip     : print snippet to stderr; don't touch main config
+write_main_config() {
+  local existing=""
+  existing="$(read_priv "$MAIN_CFG" 2>/dev/null || true)"
+  case "$choice" in
+    skip)
+      cat >&2 <<EOF
 
-Paste the following into $MAIN_CFG (or any imported module):
+Paste this snippet into $MAIN_CFG (or a separate imported file):
 
 ──────────────────────────────────────────────────────────────────────
-$(cat "$CLAUDE_PLUGIN_ROOT/alloy/claude-merge-snippet.alloy")
+$RENDERED_FENCE
 ──────────────────────────────────────────────────────────────────────
 
-Then ensure $ENV_DROPIN is sourced by the Alloy service:
-  $SD_DROPIN  with EnvironmentFile=$ENV_DROPIN
-
-Re-run /grafana-status when done.
+Then ensure $ENV_DROPIN is sourced by the Alloy service (drop-in at $SD_DROPIN
+with EnvironmentFile=$ENV_DROPIN).
 EOF
+      return 0
+      ;;
+    replace)
+      backup_priv "$MAIN_CFG"
+      printf '// Generated by claude-grafana on %s.\n%s\n' "$(date -Iseconds)" "$RENDERED_FENCE" \
+        | write_priv "$MAIN_CFG" 0644
+      log_ok "Wrote claude-only $MAIN_CFG"
+      return 0
+      ;;
+    merge)
+      backup_priv "$MAIN_CFG"
+      local new_content
+      if printf '%s\n' "$existing" | grep -q 'claude-grafana managed BEGIN'; then
+        # In-place replace between the markers.
+        log_info "Updating existing claude-grafana fenced section in $MAIN_CFG"
+        new_content="$(printf '%s\n' "$existing" | python3 -c '
+import re, sys
+text = sys.stdin.read()
+fence = sys.argv[1]
+new = re.sub(
+    r"//\s*>>> claude-grafana managed BEGIN.*?//\s*<<< claude-grafana managed END\s*\n?",
+    fence + "\n",
+    text,
+    count=1,
+    flags=re.S,
+)
+sys.stdout.write(new)
+' "$RENDERED_FENCE")"
+      elif printf '%s\n' "$existing" | grep -Eq 'import\.file[[:space:]]+"claude"|otelcol\.receiver\.otlp[[:space:]]+"claude'; then
+        # v0.1.x legacy: strip the import line / strip the inline claude_code receiver, then append.
+        log_info "Migrating legacy claude config — removing import.file/legacy receiver"
+        new_content="$(printf '%s\n' "$existing" | python3 -c '
+import re, sys
+text = sys.stdin.read()
+# Remove `import.file "claude" {...}` block.
+text = re.sub(r"//\s*claude-grafana:.*\n?", "", text)
+text = re.sub(r"import\.file\s+\"claude\"\s*\{[^}]*\}\s*\n?", "", text, flags=re.S)
+# Remove a top-level claude_code receiver block, balanced.
+def strip_block(t, marker_re):
+    m = re.search(marker_re, t)
+    if not m:
+        return t
+    # find matching close brace by depth
+    start = m.start()
+    i = m.end()
+    depth = 1
+    while i < len(t) and depth > 0:
+        if t[i] == "{":
+            depth += 1
+        elif t[i] == "}":
+            depth -= 1
+        i += 1
+    return t[:start] + t[i:].lstrip("\n")
+for marker in [
+    r"otelcol\.receiver\.otlp\s+\"claude_code\"\s*\{",
+    r"otelcol\.processor\.batch\s+\"claude(_grafana)?\"\s*\{",
+    r"otelcol\.processor\.attributes\s+\"claude(_grafana)?\"\s*\{",
+    r"otelcol\.exporter\.otlphttp\s+\"(claude_grafana|grafana_cloud)\"\s*\{",
+    r"otelcol\.auth\.basic\s+\"(claude_grafana|grafana_cloud)\"\s*\{",
+]:
+    text = strip_block(text, marker)
+sys.stdout.write(text.rstrip() + "\n\n" + sys.argv[1] + "\n")
+' "$RENDERED_FENCE")"
+      else
+        log_info "Appending fenced section to $MAIN_CFG"
+        new_content="$(printf '%s\n\n%s\n' "$existing" "$RENDERED_FENCE")"
+      fi
+      printf '%s' "$new_content" | write_priv "$MAIN_CFG" 0644
+      log_ok "Updated $MAIN_CFG"
+      ;;
+  esac
 }
 
-# ── Validate ──────────────────────────────────────────────────────────────
+cleanup_legacy_module() {
+  # v0.1.x wrote /etc/alloy/claude.alloy as an `import.file` module. v0.2.1+
+  # inlines everything; the orphan file is invalid (its top-level logging block
+  # and components are illegal in a module). Nuke if present.
+  if sudo -n test -e "$LEGACY_MOD" 2>/dev/null || [ -e "$LEGACY_MOD" ]; then
+    if [ "$DRY_RUN" = "1" ]; then
+      log_dim "  [dry-run] would remove legacy module file $LEGACY_MOD"
+      return 0
+    fi
+    log_info "Removing legacy module file $LEGACY_MOD"
+    run_priv rm -f "$LEGACY_MOD"
+    log_ok "Removed $LEGACY_MOD"
+  fi
+}
+
+# ── Validate ────────────────────────────────────────────────────────────────
 validate_alloy() {
-  log_info "Validating Alloy config..."
+  log_info "Validating Alloy config syntax..."
   if [ "$DRY_RUN" = "1" ]; then
-    log_dim "  [dry-run] would run: alloy fmt $MOD_CFG && alloy fmt $MAIN_CFG"
+    log_dim "  [dry-run] would run: alloy fmt $MAIN_CFG"
     return 0
   fi
-  # `alloy fmt --test` exits non-zero on parse errors. Use it as our static check.
-  if ! alloy fmt --test "$MOD_CFG" >/dev/null 2>&1; then
-    # Older alloy versions don't accept --test; fall back to plain fmt.
-    if ! alloy fmt "$MOD_CFG" >/dev/null 2>&1; then
-      die "alloy fmt rejected $MOD_CFG."
-    fi
-  fi
-  if ! maybe_sudo alloy fmt --test "$MAIN_CFG" >/dev/null 2>&1; then
-    if ! maybe_sudo alloy fmt "$MAIN_CFG" >/dev/null 2>&1; then
-      die "alloy fmt rejected $MAIN_CFG."
-    fi
+  # Plain alloy fmt parses the file and exits non-zero on syntax error.
+  # `--test` is intentionally NOT used (it conflates whitespace formatting
+  # with syntax validity).
+  if ! run_priv alloy fmt "$MAIN_CFG" >/dev/null 2>&1; then
+    log_err "alloy fmt rejected $MAIN_CFG. Recent backup: ${MAIN_CFG}${BACKUP_SUFFIX}"
+    die "Syntax error in $MAIN_CFG. Restore the .bak and inspect the rejected diff."
   fi
   log_ok "Alloy config parses cleanly."
 }
@@ -294,51 +364,31 @@ reload_alloy() {
     log_dim "  [dry-run] would run: systemctl reload-or-restart alloy"
     return 0
   fi
-  maybe_sudo systemctl reload-or-restart alloy
+  run_priv systemctl reload-or-restart alloy
   sleep 1
-  if maybe_sudo systemctl is-active --quiet alloy; then
+  if run_priv systemctl is-active --quiet alloy; then
     log_ok "alloy.service is active."
   else
     log_err "alloy.service failed to start. Recent logs:"
-    maybe_sudo journalctl -u alloy --no-pager -n 30 >&2 || true
-    die "Rolling back via the .pre-claude-grafana.bak files."
+    run_priv journalctl -u alloy --no-pager -n 30 >&2 || true
+    die "Rolling back via the .pre-claude-grafana.bak files (manual: sudo cp <file>.pre-claude-grafana.bak <file>)."
   fi
 }
 
-# ── Execute ───────────────────────────────────────────────────────────────
+# ── Execute ─────────────────────────────────────────────────────────────────
 case "$choice" in
-  replace)
-    backup_file "$MOD_CFG"
-    render_module "$MOD_CFG"
-    render_envfile "$ENV_DROPIN"
-    render_systemd_dropin "$SD_DROPIN"
-    write_replace_main
-    validate_alloy
-    reload_alloy
-    ;;
-  merge)
-    backup_file "$MOD_CFG"
-    render_module "$MOD_CFG"
-    render_envfile "$ENV_DROPIN"
-    render_systemd_dropin "$SD_DROPIN"
-    write_merge_main
-    validate_alloy
-    reload_alloy
-    ;;
-  module-only)
-    render_module "$MOD_CFG"
-    render_envfile "$ENV_DROPIN"
-    render_systemd_dropin "$SD_DROPIN"
-    validate_alloy
-    reload_alloy
-    ;;
   skip)
-    render_envfile "$ENV_DROPIN"
-    print_skip_snippet
+    render_envfile
+    write_main_config
     log_warn "Manual paste required. /grafana-status will show red until done."
     ;;
   *)
-    die "Internal error: unknown choice $choice"
+    render_envfile
+    render_systemd_dropin
+    cleanup_legacy_module
+    write_main_config
+    validate_alloy
+    reload_alloy
     ;;
 esac
 

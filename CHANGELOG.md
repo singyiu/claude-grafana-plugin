@@ -4,6 +4,30 @@ All notable changes to `claude-grafana` are documented here. Format follows [Kee
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-05-08
+
+Six bug fixes from live end-to-end testing of v0.2.0 against a real Grafana Cloud stack.
+
+### Fixed
+- **Architecture**: Drop the `import.file "claude"` module approach. Alloy modules can only contain `declare` and `import` blocks, so the previous design was rejected at runtime with `only declare and import blocks are allowed in a module, got logging`. Replaced with a single marker-fenced section (`// >>> claude-grafana managed BEGIN ... END`) inserted directly into the main config. Re-runs do an in-place replace between the markers (idempotent). Old v0.1.x `import.file` lines and orphan `/etc/alloy/claude.alloy` files are auto-detected and migrated.
+- **Env file perms**: `/etc/alloy/claude.env` was written `0600 root:root`, but `alloy.service` runs as user `alloy` and could not source it. The OTLP receiver therefore failed to bind on `:4317`. Now writes `0640` and `chgrp` to the alloy service group (auto-detected from `systemctl show -p User alloy`).
+- **Path detection**: `alloy_config_path()` and `alloy_config_detect.sh` confused "directory perms-blocked" with "file missing" because `[ -f /etc/alloy/config.alloy ]` returns false when cyngn can't traverse `/etc/alloy/`. Both now fall back to `sudo -n test -f` and `sudo -n cat` when the dir exists but is unreadable. New `perms-blocked` classification surfaces a clear error if sudo isn't primed.
+- **`--mode` flag honored**: Previously, when the classifier returned `missing` (often a false negative), the script auto-picked `replace` and ignored an explicit `--mode=merge`. The flag is now respected for every classification.
+- **Loki UID picker**: Grafana Cloud stacks have three Loki datasources (`-logs`, `-alert-state-history`, `-usage-insights`). The auto-discovery returned the first one (typically alert-state-history), which broke log queries. Now ranks candidates: prefer `-logs` suffix, deprioritize alert-state-history and usage-insights. Same fix applied to the Prometheus picker (deprioritize `-usage` and `-cardinality`).
+- **Validation logic**: `alloy fmt --test` exits non-zero when reformatting *would* be needed (whitespace), not when syntax is invalid. The script's two-step validation (`--test` then plain) cascaded to a parse-error message even for valid configs in unusual indentation. Now uses plain `alloy fmt > /dev/null` only, with `sudo` when the file lives in a perms-blocked dir.
+
+### Added
+- **Sudo preflight in step 3**: Aborts early with `sudo -v` instructions if `sudo -n` is not primed, instead of silently failing later.
+- **Legacy migration**: Detects v0.1.x installs (orphan `claude.alloy` module file, leftover `import.file "claude"` line, inline `otelcol.receiver.otlp "claude_code"` block) and rewrites them to the new fenced-section format.
+
+### Changed
+- `alloy/claude.alloy.tmpl` is now an *inline snippet* (no top-level `logging` block), wrapped in markers. Used as the source of truth for both the merge and replace paths.
+- `--mode=module-only` removed (no module file anymore).
+
+### Tests
+- Pytest grew from 47 to 49 cases; new tests cover the Loki picker for the Grafana Cloud 3-datasource layout and the self-hosted single-datasource fallback.
+- Bats grew with three classifier cases: marker-fenced detection, legacy `import.file` detection, legacy inline-receiver detection.
+
 ## [0.2.0] - 2026-05-08
 ### Changed (BREAKING for setup flow only)
 - `.env` location moved from `<plugin-root>/.env` to `~/.config/claude-grafana/.env` (XDG-aware via `XDG_CONFIG_HOME`). The plugin cache directory gets garbage-collected on plugin updates, which would have wiped tokens. Legacy plugin-root `.env` is still read as a fallback during migration.

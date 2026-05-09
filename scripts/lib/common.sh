@@ -305,6 +305,7 @@ alloy_config_path() {
     printf '%s\n' "$ALLOY_CONFIG_PATH"
     return 0
   fi
+  # Direct readable check.
   for p in \
     /etc/alloy/config.alloy \
     "$(brew --prefix 2>/dev/null)/etc/alloy/config.alloy" \
@@ -314,6 +315,14 @@ alloy_config_path() {
       return 0
     fi
   done
+  # If /etc/alloy/ exists but cyngn can't traverse it, root-perms bug fix:
+  # try sudo -n to confirm the system path before falling through.
+  if [ -d /etc/alloy ] && [ ! -r /etc/alloy ]; then
+    if sudo -n test -f /etc/alloy/config.alloy 2>/dev/null; then
+      printf '/etc/alloy/config.alloy\n'
+      return 0
+    fi
+  fi
   printf '/etc/alloy/config.alloy\n'
 }
 
@@ -328,6 +337,31 @@ alloy_envfile_path() {
     printf '/etc/alloy/claude.env\n'
   else
     printf '%s/.config/alloy/claude.env\n' "$HOME"
+  fi
+}
+
+# Detects the user that runs alloy.service. Defaults to "alloy" on standard
+# package installs. Returns empty string if no service / user found.
+alloy_service_user() {
+  if command -v systemctl >/dev/null 2>&1; then
+    local u
+    u="$(systemctl show -p User --value alloy 2>/dev/null || true)"
+    if [ -n "$u" ] && [ "$u" != "(unset)" ]; then
+      printf '%s\n' "$u"
+      return 0
+    fi
+  fi
+  # Default for package-installed alloy on Linux.
+  if id alloy >/dev/null 2>&1; then
+    printf 'alloy\n'
+  fi
+}
+
+alloy_service_group() {
+  local u
+  u="$(alloy_service_user)"
+  if [ -n "$u" ]; then
+    id -gn "$u" 2>/dev/null || printf '%s\n' "$u"
   fi
 }
 

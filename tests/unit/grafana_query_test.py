@@ -262,3 +262,62 @@ def test_grafana_client_discovers_datasources():
         client.query_prom("up", "5m")
     assert client.prom_uid == "p1"
     assert client.loki_uid == "l1"
+
+
+def test_grafana_client_picks_logs_loki_over_alert_state_history():
+    """Grafana Cloud has 3 Loki datasources. Pick the real logs one."""
+    cloud_datasources = [
+        {"uid": "grafanacloud-alert-state-history", "type": "loki",
+         "name": "grafanacloud-mystack-alert-state-history"},
+        {"uid": "grafanacloud-cardinality-management", "type": "grafanacloud-cardinality-datasource",
+         "name": "grafanacloud-cardinality"},
+        {"uid": "grafanacloud-logs", "type": "loki",
+         "name": "grafanacloud-mystack-logs"},
+        {"uid": "grafanacloud-usage-insights", "type": "loki",
+         "name": "grafanacloud-mystack-usage-insights"},
+        {"uid": "grafanacloud-prom", "type": "prometheus",
+         "name": "grafanacloud-mystack-prom"},
+        {"uid": "grafanacloud-usage", "type": "prometheus",
+         "name": "grafanacloud-usage"},
+    ]
+    sequence = [
+        _FakeResponse(cloud_datasources),
+        _FakeResponse({"data": {"result": []}}),
+    ]
+    def fake_urlopen(req, timeout):
+        return sequence.pop(0)
+
+    env = {
+        "GRAFANA_CLOUD_STACK_URL": "https://test.grafana.net",
+        "GRAFANA_CLOUD_API_TOKEN": "glsa_xxx",
+    }
+    client = gq.GrafanaClient(env)
+    with patch("urllib.request.urlopen", fake_urlopen):
+        client.query_prom("up", "5m")
+    # The actual logs one, not the alerting/usage variants.
+    assert client.loki_uid == "grafanacloud-logs"
+    # Primary metrics, not the usage one.
+    assert client.prom_uid == "grafanacloud-prom"
+
+
+def test_grafana_client_falls_back_when_no_logs_named_loki():
+    """If no Loki has 'logs' in name, fall back to first candidate."""
+    sequence = [
+        _FakeResponse([
+            {"uid": "myloki", "type": "loki", "name": "self-hosted-loki"},
+            {"uid": "promds", "type": "prometheus", "name": "self-prom"},
+        ]),
+        _FakeResponse({"data": {"result": []}}),
+    ]
+    def fake_urlopen(req, timeout):
+        return sequence.pop(0)
+
+    env = {
+        "GRAFANA_CLOUD_STACK_URL": "https://test.grafana.net",
+        "GRAFANA_CLOUD_API_TOKEN": "glsa_xxx",
+    }
+    client = gq.GrafanaClient(env)
+    with patch("urllib.request.urlopen", fake_urlopen):
+        client.query_prom("up", "5m")
+    assert client.loki_uid == "myloki"
+    assert client.prom_uid == "promds"
