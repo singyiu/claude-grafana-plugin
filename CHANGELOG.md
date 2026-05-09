@@ -4,6 +4,17 @@ All notable changes to `claude-grafana` are documented here. Format follows [Kee
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-05-08
+
+### Fixed
+- **HIGH: counter metric temporality.** Claude Code's OTel SDK emits counter metrics (`claude_code.session.count`, `claude_code.cost.usage`, `claude_code.token.usage`, `claude_code.active_time.total`, etc.) with **delta** temporality, but Grafana Cloud's OTLP gateway forwards to Mimir, which only accepts **cumulative**. Every counter was rejected with HTTP 400 `invalid temporality and type combination for metric ...` and dropped, so no Claude Code metrics ever landed in the stack. Two fixes applied (belt + suspenders):
+  1. `04-enable-claude-otel.sh` now sets `OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE=cumulative` in `~/.claude/settings.json`, telling the SDK to emit cumulative directly.
+  2. The Alloy pipeline gained an `otelcol.processor.deltatocumulative` stage between the receiver and the batch processor, converting any delta-temporality metrics that still slip through.
+- Same fix applied to `alloy/claude-merge-snippet.alloy` for users who chose `--mode=skip`.
+
+### Migration
+Existing v0.2.1 users: re-run `/grafana-setup` (or just steps 3 + 4 directly). Both are idempotent; they'll add the new env var and rewrite the fenced Alloy section to include the new processor.
+
 ## [0.2.1] - 2026-05-08
 
 Six bug fixes from live end-to-end testing of v0.2.0 against a real Grafana Cloud stack.

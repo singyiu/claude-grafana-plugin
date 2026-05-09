@@ -13,8 +13,16 @@ otelcol.receiver.otlp "claude_code" {
   grpc { endpoint = "127.0.0.1:4317" }
   http { endpoint = "127.0.0.1:4318" }
   output {
-    metrics = [otelcol.processor.batch.claude_grafana.input]
+    metrics = [otelcol.processor.deltatocumulative.claude_grafana.input]
     logs    = [otelcol.processor.batch.claude_grafana.input]
+  }
+}
+
+// Convert delta-temporality counters (Claude Code default) to cumulative,
+// required by Grafana Cloud / Mimir. Without this, metrics fail with HTTP 400.
+otelcol.processor.deltatocumulative "claude_grafana" {
+  output {
+    metrics = [otelcol.processor.batch.claude_grafana.input]
   }
 }
 

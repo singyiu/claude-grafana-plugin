@@ -7,13 +7,27 @@
 //   GRAFANA_CLOUD_OTLP_ENDPOINT      OTLP gateway URL
 //   GRAFANA_CLOUD_OTLP_INSTANCE_ID   numeric instance ID (basic-auth username)
 //   GRAFANA_CLOUD_OTLP_API_TOKEN     access-policy token (basic-auth password)
+//
+// Pipeline:
+//   receiver.otlp ─► deltatocumulative ─► batch ─► exporter.otlphttp  (metrics)
+//   receiver.otlp ─►                       batch ─► exporter.otlphttp  (logs)
+//
+// `deltatocumulative` is required because Claude Code emits counter metrics
+// with delta temporality but Grafana Cloud / Mimir requires cumulative.
+// Without it, all counter metrics fail with HTTP 400 "invalid temporality".
 
 otelcol.receiver.otlp "claude_code" {
   grpc { endpoint = "127.0.0.1:4317" }
   http { endpoint = "127.0.0.1:4318" }
   output {
-    metrics = [otelcol.processor.batch.claude_grafana.input]
+    metrics = [otelcol.processor.deltatocumulative.claude_grafana.input]
     logs    = [otelcol.processor.batch.claude_grafana.input]
+  }
+}
+
+otelcol.processor.deltatocumulative "claude_grafana" {
+  output {
+    metrics = [otelcol.processor.batch.claude_grafana.input]
   }
 }
 
